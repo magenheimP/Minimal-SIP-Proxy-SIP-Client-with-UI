@@ -4,7 +4,7 @@ project(SIPTrainingProject VERSION 1.0 LANGUAGES CXX)
 
 # Project-wide options & warnings targets
 add_library(project_options INTERFACE
-        local_tests/sip_message_test.cpp)
+        tests/parser_tests.cpp)
 add_library(project_warnings INTERFACE)
 
 # Enforce C++20 (in addition to the global set, harmless)
