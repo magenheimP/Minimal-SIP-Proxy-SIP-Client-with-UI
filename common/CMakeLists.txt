@@ -1,11 +1,13 @@
-add_library(common INTERFACE)
+add_library(common STATIC
+        src/sip_message.cpp)
 
+# Make headers visible to any target linking with common
 target_include_directories(common
-        INTERFACE
+        PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
+# Add project-wide options and warnings
 target_link_libraries(common
-        INTERFACE
-        project_options
+        PUBLIC project_options project_warnings
 )
