@@ -1,4 +1,4 @@
-#include "common/sip_message.h"
+#include "common/sip_message.hpp"
 
 namespace common {
 
