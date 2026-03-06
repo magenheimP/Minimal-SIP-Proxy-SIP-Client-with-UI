@@ -2,6 +2,21 @@ cmake_minimum_required(VERSION 3.16)
 
 project(SIPTrainingProject VERSION 1.0 LANGUAGES CXX)
 
+# Project-wide options & warnings targets
+add_library(project_options INTERFACE
+        local_tests/sip_message_test.cpp)
+add_library(project_warnings INTERFACE)
+
+# Enforce C++20 (in addition to the global set, harmless)
+target_compile_features(project_options INTERFACE cxx_std_20)
+
+# Strict warnings
+if (MSVC)
+    target_compile_options(project_warnings INTERFACE /W4 /WX)
+else()
+    target_compile_options(project_warnings INTERFACE -Wall -Wextra -Werror)
+endif()
+
 # Enforce C++20
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
