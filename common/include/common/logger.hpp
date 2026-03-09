@@ -3,23 +3,25 @@
 #include <string>
 #include <mutex>
 
-class Logger
-{
-public:
+namespace common {
+    class Logger
+    {
+    public:
 
-    static Logger& instance();
+        static Logger& instance();
 
-    void log(const std::string& component,
-             const std::string& call_id,
-             const std::string& state,
-             const std::string& message);
+        void log(const std::string& component,
+                 const std::string& call_id,
+                 const std::string& state,
+                 const std::string& message);
 
-private:
+    private:
 
-    Logger() = default;
+        Logger() = default;
 
-    static std::string timestamp();
-    static std::string thread_id();
+        static std::string timestamp();
+        static std::string thread_id();
 
-    std::mutex m_mutex;
-};
+        std::mutex m_mutex;
+    };
+}
