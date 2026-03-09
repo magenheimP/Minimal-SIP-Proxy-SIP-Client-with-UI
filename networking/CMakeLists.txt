@@ -3,7 +3,8 @@ add_library(networking INTERFACE
         src/udp_socket.cpp
         include/networking/IUdpTransport.h
         include/networking/udp_transport.h
-        src/udp_transport.cpp)
+        src/udp_transport.cpp
+)
 
 target_include_directories(networking
         INTERFACE
