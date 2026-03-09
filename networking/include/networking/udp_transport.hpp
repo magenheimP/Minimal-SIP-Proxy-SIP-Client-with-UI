@@ -5,8 +5,8 @@
 #ifndef SIPTRAININGPROJECT_UDP_TRANSPORT_H
 #define SIPTRAININGPROJECT_UDP_TRANSPORT_H
 #pragma once
-#include "IUdpTransport.h"
-#include "udp_socket.h"
+#include "IUdpTransport.hpp"
+#include "udp_socket.hpp"
 #include <thread>
 #include <atomic>
 

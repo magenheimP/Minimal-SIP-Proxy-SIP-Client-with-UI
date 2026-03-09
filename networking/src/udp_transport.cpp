@@ -2,7 +2,7 @@
 // Created by lazarstani on 3/6/26.
 //
 
-#include "../include/networking/udp_transport.h"
+#include "../include/networking/udp_transport.hpp"
 #include <chrono>
 #include <thread>
 #include <iostream>
@@ -46,21 +46,23 @@ void UdpTransport::stop() {
 }
 
 void UdpTransport::receiveLoop() {
-
-    char buffer[65536];
+    size_t buffer_size = 65536;
+    auto buffer = std::make_unique<char[]>(buffer_size);
 
     while (running) {
-
         std::string ip;
         uint16_t port;
 
-        ssize_t received =
-            socket.recvFrom(buffer, sizeof(buffer), ip, port);
+        ssize_t received = socket.recvFrom(buffer.get(), buffer_size, ip, port);
 
-        if (received > 0) {
-
-            std::string data(buffer, received);
-
+        if (received < 0) {
+            if (errno != EWOULDBLOCK && errno != EAGAIN)
+                perror("recvFrom");
+        } else if (static_cast<size_t>(received) == buffer_size) {
+            buffer_size *= 2;
+            buffer = std::make_unique<char[]>(buffer_size);
+        } else if (received > 0) {
+            std::string data(buffer.get(), received);
             if (callback)
                 callback(data, ip, port);
         }
