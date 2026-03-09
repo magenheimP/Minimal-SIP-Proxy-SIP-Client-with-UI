@@ -4,5 +4,6 @@ add_executable(parser_tests
 
 target_link_libraries(parser_tests
         PRIVATE
+        proxy
         common
 )
