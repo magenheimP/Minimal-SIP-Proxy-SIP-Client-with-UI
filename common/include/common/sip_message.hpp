@@ -18,8 +18,11 @@ namespace common {
         std::string get_header(const std::string& name) const;
         void set_header(const std::string& name, const std::string& value);
         void add_header(const std::string& name, const std::string& value);
+<<<<<<< feature/loggerSkeleton
 
         std::string serialize() const;
+=======
+>>>>>>> dev
     };
 
 }
