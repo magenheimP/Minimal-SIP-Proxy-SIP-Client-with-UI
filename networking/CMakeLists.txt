@@ -3,8 +3,6 @@ add_library(networking
         include/networking/thread_pool.hpp
         include/networking/udp_socket.hpp
         src/udp_socket.cpp
-        include/networking/IUdpTransport.hpp
-        include/networking/udp_transport.hpp
         src/udp_transport.cpp
 )
 
