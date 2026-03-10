@@ -1,5 +1,7 @@
 add_library(client
         src/sip_client.cpp
+        include/client/input_handler.hpp
+        src/sip_register_handler.cpp
 )
 
 target_include_directories(client
