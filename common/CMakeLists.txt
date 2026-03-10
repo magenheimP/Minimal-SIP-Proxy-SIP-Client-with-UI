@@ -9,7 +9,6 @@ target_include_directories(common_headers
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-# Add project-wide options and warnings
 target_link_libraries(common
         PUBLIC common_headers project_options project_warnings
 )
