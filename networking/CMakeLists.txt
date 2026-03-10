@@ -1,4 +1,6 @@
 add_library(networking INTERFACE
+        src/thread_pool.cpp
+        include/networking/thread_pool.h
         include/networking/udp_socket.hpp
         src/udp_socket.cpp
         include/networking/IUdpTransport.hpp
