@@ -14,9 +14,8 @@ int main() {
         bool running = true;
         while (running) {
             std::cout << "> ";
-
             std::string cmd;
-
+            std::cin >> cmd;
             if (cmd == "register") {
                 std::string username;
                 std::string domain;
