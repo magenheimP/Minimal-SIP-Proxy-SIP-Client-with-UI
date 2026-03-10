@@ -41,7 +41,7 @@ namespace common {
 
         std::string output = log_line.str();
 
-        std::cout << output << std::endl;
+        //std::cout << output << std::endl;
 
         if (m_file.is_open()) {
             m_file << output << std::endl;
