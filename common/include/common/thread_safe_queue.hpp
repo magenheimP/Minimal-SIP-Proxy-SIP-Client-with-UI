@@ -2,8 +2,8 @@
 // Created by vladimirsubotic on 3/9/26.
 //
 
-#ifndef _THREAD_SAFE_QUEUE_H
-#define _THREAD_SAFE_QUEUE_H
+#ifndef _THREAD_SAFE_QUEUE_HPP
+#define _THREAD_SAFE_QUEUE_HPP
 
 #pragma once
 #include <queue>
@@ -72,4 +72,4 @@ public:
     }
 };
 
-#endif //_THREAD_SAFE_QUEUE_H
+#endif //_THREAD_SAFE_QUEUE_HPP
