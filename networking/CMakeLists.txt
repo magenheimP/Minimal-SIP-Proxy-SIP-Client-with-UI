@@ -1,4 +1,4 @@
-add_library(networking INTERFACE
+add_library(networking
         src/thread_pool.cpp
         include/networking/thread_pool.hpp
         include/networking/udp_socket.hpp
@@ -9,12 +9,12 @@ add_library(networking INTERFACE
 )
 
 target_include_directories(networking
-        INTERFACE
+        PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(networking
-        INTERFACE
+        PUBLIC
         common
         project_options
 )
