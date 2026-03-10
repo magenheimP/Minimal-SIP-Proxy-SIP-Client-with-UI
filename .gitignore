@@ -54,7 +54,7 @@ Testing/
 # Logs
 
 # =========================
-
+/logs
 *.log
 
 # =========================
@@ -100,5 +100,6 @@ Thumbs.db
 tmp/
 temp/
 *.tmp
+
 
 /local_tests/

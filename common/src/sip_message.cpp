@@ -1,4 +1,5 @@
-#include "common/sip_message.h"
+#include "common/sip_message.hpp"
+#include <sstream>
 
 namespace common {
 
@@ -26,6 +27,26 @@ namespace common {
         }
 
         add_header(name, value);
+    }
+
+    std::string SIPMessage::serialize() const {
+        std::ostringstream ss;
+
+        // Start line
+        ss << start_line << "\r\n";
+
+        // Headers
+        for (const auto& header : headers) {
+            ss << header.name << ": " << header.value << "\r\n";
+        }
+
+        // Empty line separating headers and body
+        ss << "\r\n";
+
+        // Body (optional)
+        ss << body;
+
+        return ss.str();
     }
 
 }
