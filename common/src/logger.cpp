@@ -5,12 +5,22 @@
 #include <iomanip>
 #include <sstream>
 #include <thread>
+#include <filesystem>
+
 namespace common {
-    Logger& Logger::instance()
+
+    Logger& Logger::instance(const std::string& filename)
     {
-        static Logger logger;
+        static Logger logger(filename.empty() ? "default.log" : filename);
         return logger;
     }
+    Logger::Logger(const std::string& filename)
+    {
+        std::filesystem::create_directories("logs");
+
+        m_file.open("logs/" + filename, std::ios::app);
+    }
+
 
     void Logger::log(const std::string& component,
                      const std::string& call_id,
@@ -19,14 +29,24 @@ namespace common {
     {
         std::lock_guard lock(m_mutex);
 
-        std::cout
+        std::ostringstream log_line;
+
+        log_line
             << "[" << timestamp() << "] "
             << "[" << thread_id() << "] "
             << "[" << component << "] "
             << "[CallID=" << call_id << "] "
             << "[" << state << "] "
-            << message
-            << std::endl;
+            << message;
+
+        std::string output = log_line.str();
+
+        std::cout << output << std::endl;
+
+        if (m_file.is_open()) {
+            m_file << output << std::endl;
+            m_file.flush();
+        }
     }
 
     std::string Logger::timestamp()
