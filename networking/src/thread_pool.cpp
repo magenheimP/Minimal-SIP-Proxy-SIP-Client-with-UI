@@ -2,7 +2,7 @@
 // Created by vladimirsubotic on 3/9/26.
 //
 
-#include "thread_pool.h"
+#include "../include/networking/thread_pool.hpp"
 
 ThreadPool::ThreadPool(size_t numThreads) : running(true)
 {
@@ -20,7 +20,7 @@ ThreadPool::~ThreadPool()
 void ThreadPool::workerLoop()
 {
  	 Task task;
-	 while (running.load() && taskQueue.pop(task)) {
+	 while (taskQueue.pop(task)) {
      	task();
     }
 }
