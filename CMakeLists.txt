@@ -3,8 +3,6 @@ cmake_minimum_required(VERSION 3.16)
 project(SIPTrainingProject VERSION 1.0 LANGUAGES CXX)
 
 # Project-wide options & warnings targets
-add_library(project_options INTERFACE
-        tests/parser_tests.cpp)
 add_library(project_options INTERFACE)
 add_library(project_warnings INTERFACE)
 
