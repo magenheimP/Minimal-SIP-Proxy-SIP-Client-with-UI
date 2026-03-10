@@ -19,6 +19,7 @@ add_executable(client_cli
 )
 
 target_link_libraries(client_cli
-        PRIVATE
         client
+        common
+        networking
 )
