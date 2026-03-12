@@ -1,68 +1,101 @@
 #include "client/sip_client.hpp"
-
 #include <iostream>
-#include <sstream>
-#include <string>
-#include <ctime>
 
-
-#include "common/sip_message.hpp"
-#include "../include/networking/udp_transport.hpp"
-
-
-int SIPClient::global_cseq = 1;
-std::string SIPClient::global_call_id;
-
-SIPClient::SIPClient(const std::string& ip, int port)
-    : server_ip(ip), server_port(port)
+SIPClient::SIPClient(const std::string& server_ip, int server_port)
+    : server_ip_(server_ip)
+    , server_port_(server_port)
+    , logger_(common::Logger::instance())
+    , transport_()
+    , factory_(server_ip, server_port)
+    , receiver_()
+    , state_()
+    , register_handler_(*this)
+    , cli_(*this)
 {
-    std::srand(std::time(nullptr));
-    global_call_id = std::to_string(std::rand() % 1000000) + "@" + server_ip;
+    logger_.log("CLIENT", "-", "STARTUP", "SIPClient constructed");
 }
-std::string SIPClient::serializeMessage(const common::SIPMessage& msg)
+
+void SIPClient::run()
 {
-    std::ostringstream oss;
-    oss << msg.start_line << "\r\n";
-    for (const auto& h : msg.headers)
-    {
-        oss << h.name << ": " << h.value << "\r\n";
-    }
-    oss << "\r\n";
-    return oss.str();
-}
-std::string SIPClient::buildRegisterMessage(const std::string& username, const std::string& domain)
-{
-    common::SIPMessage msg;
-    msg.start_line = "REGISTER sip:" + domain + " SIP/2.0";
 
-    std::string port_str = std::to_string(server_port);
+    transport_.start(
+        0,
+        [this](const std::string& data,
+               const std::string& sender_ip,
+               uint16_t           sender_port)
+        {
+            on_packet_received(data, sender_ip, sender_port);
+        }
+    );
 
-    msg.add_header("Via", "SIP/2.0/UDP " + server_ip + ":" + port_str);
-    msg.add_header("From", "<sip:" + username + "@" + domain + ">");
-    msg.add_header("To", "<sip:" + username + "@" + domain + ">");
-    msg.add_header("Call-ID", global_call_id);
-    msg.add_header("CSeq", std::to_string(global_cseq) + " REGISTER");
-    msg.add_header("Contact", "<sip:" + username + "@" + server_ip + ">");
-    msg.add_header("Content-Length", "0");
-
-    global_cseq++;
+    logger_.log("NETWORK", "-", "READY", "UDP transport started");
 
 
-    return serializeMessage(msg);
+    cli_.run();
+
+    transport_.stop();
+    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    logger_.log("CLIENT", "-", "EXIT",  "Program terminated");
 }
 
 
 
-void SIPClient::sendRegister(UdpTransport& transport,
-                             const std::string& username,
-                             const std::string& domain,
-                             bool verbose)
+void SIPClient::send_to_server(const std::string& message)
 {
-    std::string message = buildRegisterMessage(username, domain);
+    transport_.send(message, server_ip_, static_cast<uint16_t>(server_port_));
+}
 
-    transport.send(message, server_ip, server_port);
+bool SIPClient::wait_for_register_response(int timeout_seconds)
+{
+    return receiver_.wait_for_response(timeout_seconds);
+}
 
-    if (verbose) {
-        std::cout << "Sent REGISTER:\n" << message << "\n";
-    }
+void SIPClient::reset_receive_state()
+{
+    receiver_.reset();
+}
+
+std::pair<bool, std::string> SIPClient::register_response_snapshot() const
+{
+    return { receiver_.get_register_received(),
+             receiver_.get_register_response() };
+}
+
+std::string SIPClient::build_register_message(const std::string& username,
+                                               const std::string& domain)
+{
+    return factory_.build_register(username, domain);
+}
+
+SIPStateManager& SIPClient::state()
+{
+    return state_;
+}
+
+common::Logger& SIPClient::logger()
+{
+    return logger_;
+}
+
+
+void SIPClient::do_register(const std::string& username,
+                             const std::string& domain)
+{
+    register_handler_.handle_register(username, domain);
+}
+
+
+void SIPClient::on_packet_received(const std::string& data,
+                                    const std::string& sender_ip,
+                                    uint16_t           sender_port)
+{
+    logger_.log("NETWORK", "-", "RECV_PACKET",
+                "From " + sender_ip + ":" + std::to_string(sender_port));
+    logger_.log("NETWORK", "-", "SIP_MESSAGE", data);
+
+    std::cout << "\nReceived SIP response from "
+              << sender_ip << ":" << sender_port << "\n"
+              << data << "\n> " << std::flush;
+
+    receiver_.handle_receive(data);
 }

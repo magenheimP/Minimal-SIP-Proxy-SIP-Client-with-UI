@@ -1,6 +1,8 @@
 add_library(client
         src/sip_client.cpp
-        include/client/input_handler.hpp
+        src/sip_message_factory.cpp
+        src/sip_receive_handler.cpp
+        src/sip_state_manager.cpp
         src/sip_register_handler.cpp
 )
 
@@ -17,7 +19,8 @@ target_link_libraries(client
 )
 
 add_executable(client_cli
-        src/client_cli.cpp
+        src/main.cpp
+        src/cli_handler.cpp
 )
 
 target_link_libraries(client_cli
