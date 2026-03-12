@@ -15,8 +15,8 @@ public:
         std::string tmp = data;
         std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper); // case-insensitive
 
-        if (tmp.find("SIP/2.0") != std::string::npos &&
-            (tmp.find("200 OK") != std::string::npos || tmp.find("401") != std::string::npos)) {
+        if ((tmp.find("SIP/2.0") != std::string::npos) &&
+            ((tmp.find("200 OK") != std::string::npos) || (tmp.find("401") != std::string::npos))) {
             std::lock_guard<std::mutex> lock(mtx);
             register_response_received = true;
             register_response = data;

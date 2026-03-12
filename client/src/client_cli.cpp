@@ -61,7 +61,7 @@ int main() {
 
                 register_handler.handle_register(username, domain);
             }
-            else if (cmd == "exit" || cmd == "quit") {
+            else if ((cmd == "exit") || (cmd == "quit")) {
                 logger.log("CLIENT", "-", "SHUTDOWN", "Client exiting");
                 std::cout << "Exiting client.\n";
                 running = false;
