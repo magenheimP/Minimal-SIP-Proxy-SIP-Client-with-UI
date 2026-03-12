@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-#include "common/sip_message.h"
+#include "common/sip_message.hpp"
 #include "networking/udp_transport.hpp"
 
 class SIPClient {
@@ -10,7 +10,8 @@ public:
     std::string buildRegisterMessage(const std::string& username, const std::string& domain);
     void sendRegister(UdpTransport& transport,
                   const std::string& username,
-                  const std::string& domain);
+                  const std::string& domain,
+                  bool verbose = true);
     std::string serializeMessage(const common::SIPMessage& msg);
 
 private:

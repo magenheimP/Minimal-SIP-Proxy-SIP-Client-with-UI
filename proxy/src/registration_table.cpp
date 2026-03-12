@@ -2,7 +2,7 @@
 // Created by tamara on 3/9/26.
 //
 
-#include "proxy/registration_table.hpp"
+#include "../include/proxy/registration_table.hpp"
 
 namespace proxy {
 
