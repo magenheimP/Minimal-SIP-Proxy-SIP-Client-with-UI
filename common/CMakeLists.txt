@@ -1,6 +1,7 @@
 add_library(common STATIC
         src/sip_message.cpp
-        src/logger.cpp)
+        src/logger.cpp
+        include/common/types.hpp)
         
 add_library(common_headers INTERFACE
         include/common/thread_safe_queue.hpp)
