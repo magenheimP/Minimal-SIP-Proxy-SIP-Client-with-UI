@@ -1,7 +1,11 @@
 add_library(proxy
         src/sip_parser.cpp
         src/registration_table.cpp
-        src/register_handler.cpp)
+        src/register_handler.cpp
+        include/proxy/call_state.hpp
+        src/call_state.cpp
+        include/proxy/call_state_machine.hpp
+        src/call_state_machine.cpp)
 
 target_include_directories(proxy
         PUBLIC

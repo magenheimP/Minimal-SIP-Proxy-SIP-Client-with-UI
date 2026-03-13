@@ -2,7 +2,6 @@
 #include <sstream>
 
 namespace common {
-
     std::string SIPMessage::get_header(const std::string& name) const {
         for (const auto& h : headers) {
             if (h.name == name) {
@@ -15,6 +14,23 @@ namespace common {
     void SIPMessage::add_header(const std::string& name,
                                 const std::string& value) {
         headers.push_back({name, value});
+    }
+
+    bool SIPMessage::has_header(const std::string &name) const {
+        for (const auto& h : headers) {
+            if (h.name == name) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool SIPMessage::is_request() const {
+        return !start_line.empty() && !is_response();
+    }
+
+    bool SIPMessage::is_response() const {
+        return start_line.rfind("SIP/2.0", 0) == 0;
     }
 
     void SIPMessage::set_header(const std::string& name,
@@ -48,5 +64,4 @@ namespace common {
 
         return ss.str();
     }
-
 }
