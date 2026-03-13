@@ -6,7 +6,8 @@
 #include <ctime>
 
 
-#include "networking/udp_transport.hpp"
+#include "common/sip_message.hpp"
+#include "../include/networking/udp_transport.hpp"
 
 
 int SIPClient::global_cseq = 1;
@@ -54,11 +55,14 @@ std::string SIPClient::buildRegisterMessage(const std::string& username, const s
 
 void SIPClient::sendRegister(UdpTransport& transport,
                              const std::string& username,
-                             const std::string& domain)
+                             const std::string& domain,
+                             bool verbose)
 {
     std::string message = buildRegisterMessage(username, domain);
 
     transport.send(message, server_ip, server_port);
 
-    std::cout << "Sent REGISTER:\n" << message << "\n";
+    if (verbose) {
+        std::cout << "Sent REGISTER:\n" << message << "\n";
+    }
 }

@@ -2,8 +2,8 @@
 // Created by tamara on 3/9/26.
 //
 
-#include "proxy/register_handler.hpp"
-
+#include "../include/proxy/register_handler.hpp"
+#include "../include/proxy/registration_table.hpp"
 #include <iostream>
 
 namespace proxy {
