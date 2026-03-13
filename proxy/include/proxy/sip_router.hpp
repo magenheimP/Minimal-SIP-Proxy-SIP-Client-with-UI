@@ -6,7 +6,6 @@
 // NOTE:
 // This router currently implements the minimal routing logic required for
 // REGISTER handling and basic INVITE routing using the RegistrationTable.
-//
 // Future improvements planned for this module:
 // - integration with CallSession / CallStateMachine
 // - proper response routing based on Via headers
