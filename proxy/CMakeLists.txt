@@ -1,7 +1,8 @@
 add_library(proxy
         src/sip_parser.cpp
         src/registration_table.cpp
-        src/register_handler.cpp)
+        src/register_handler.cpp
+        src/sip_router.cpp)
 
 target_include_directories(proxy
         PUBLIC
