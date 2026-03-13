@@ -5,13 +5,6 @@
 #include <unordered_map>
 #include <stdexcept>
 
-static const std::unordered_map<common::SIPRequest::Method, std::string> k_method_str = {
-    { common::SIPRequest::Method::REGISTER, "REGISTER" },
-    { common::SIPRequest::Method::INVITE,   "INVITE"   },
-    { common::SIPRequest::Method::BYE,      "BYE"      },
-    { common::SIPRequest::Method::ACK,      "ACK"      },
-};
-
 SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port)
     : local_ip_(local_ip)
     , local_port_(local_port)
@@ -22,34 +15,37 @@ SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port
     register_call_id_ = std::to_string(std::rand() % 1000000) + "@" + local_ip_;
 }
 
-std::string SIPMessageFactory::build(const common::SIPRequest& req)
+std::string SIPMessageFactory::build(const std::string& method,
+                                     const std::string& from_username,
+                                     const std::string& from_domain,
+                                     const std::string& to_username,
+                                     const std::string& to_domain,
+                                     const std::string& call_id,
+                                     const std::string& body)
 {
-    const auto it = k_method_str.find(req.method);
-    if (it == k_method_str.end())
-        throw std::invalid_argument("Unknown SIP method");
+    if (method.empty())
+        throw std::invalid_argument("SIP method must not be empty");
 
-    const std::string& method = it->second;
-    const std::string  to_uri = "sip:" + req.to_username + "@" + req.to_domain;
-    const std::string  call_id = (req.method == common::SIPRequest::Method::REGISTER)
-                                     ? register_call_id_
-                                     : req.call_id;
+    const bool        is_register      = (method == "REGISTER");
+    const std::string to_uri           = "sip:" + to_username + "@" + to_domain;
+    const std::string effective_call_id = is_register ? register_call_id_ : call_id;
 
     common::SIPMessage msg;
     msg.start_line = method + " " + to_uri + " SIP/2.0";
 
     msg.add_header("Via",     make_via());
-    msg.add_header("From",    "<sip:" + req.from_username + "@" + req.from_domain + ">");
+    msg.add_header("From",    "<sip:" + from_username + "@" + from_domain + ">");
     msg.add_header("To",      "<" + to_uri + ">");
-    msg.add_header("Call-ID", call_id);
+    msg.add_header("Call-ID", effective_call_id);
     msg.add_header("CSeq",    std::to_string(cseq_++) + " " + method);
-    if (req.method == common::SIPRequest::Method::REGISTER)
-        msg.add_header("Contact", req.contact);
-    if (!req.body.empty()) {
-        msg.add_header("Content-Length", std::to_string(req.body.size()));
-        msg.body = req.body;
-    } else {
-        msg.add_header("Content-Length", "0");
-    }
+
+    if (is_register)
+        msg.add_header("Contact", "<sip:" + from_username + "@" + local_ip_ + ">");
+
+    msg.add_header("Content-Length", body.empty() ? "0" : std::to_string(body.size()));
+
+    if (!body.empty())
+        msg.body = body;
 
     return serialize(msg);
 }
@@ -72,12 +68,5 @@ std::string SIPMessageFactory::serialize(const common::SIPMessage& msg) const
 std::string SIPMessageFactory::build_register(const std::string& username,
                                                const std::string& domain)
 {
-    common::SIPRequest req;
-    req.method        = common::SIPRequest::Method::REGISTER;
-    req.from_username = username;
-    req.from_domain   = domain;
-    req.to_username   = username;
-    req.to_domain     = domain;
-    req.contact       = "<sip:" + username + "@" + local_ip_ + ">";
-    return build(req);
+    return build("REGISTER", username, domain, username, domain);
 }

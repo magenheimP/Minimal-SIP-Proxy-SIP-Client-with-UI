@@ -2,7 +2,7 @@ add_library(client
         src/sip_client.cpp
         src/sip_message_factory.cpp
         src/sip_receive_handler.cpp
-        src/sip_state_manager.cpp
+        src/sip_client_state_manager.cpp
         src/sip_register_handler.cpp
 )
 
@@ -19,7 +19,6 @@ target_link_libraries(client
 )
 
 add_executable(client_cli
-        src/main.cpp
         src/cli_handler.cpp
 )
 

@@ -1,5 +1,31 @@
 #include "client/sip_client.hpp"
 #include <iostream>
+#include <stdexcept>
+#include <cstdlib>
+
+int main(int argc, char* argv[])
+{
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <server_ip> <server_port>\n";
+        std::cerr << "Example: " << argv[0] << " 127.0.0.1 5060\n";
+        return 1;
+    }
+
+    const std::string server_ip   = argv[1];
+    const int         server_port = std::stoi(argv[2]);
+
+    try {
+        common::Logger::instance("client.log")
+               .log("MAIN", "-", "START", "Client starting");
+        SIPClient client(server_ip, server_port);
+        client.run();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Fatal error: " << e.what() << "\n";
+        return 1;
+    }
+    return 0;
+}
 
 SIPClient::SIPClient(const std::string& server_ip, int server_port)
     : server_ip_(server_ip)
@@ -17,7 +43,6 @@ SIPClient::SIPClient(const std::string& server_ip, int server_port)
 
 void SIPClient::run()
 {
-
     transport_.start(
         0,
         [this](const std::string& data,
@@ -30,15 +55,12 @@ void SIPClient::run()
 
     logger_.log("NETWORK", "-", "READY", "UDP transport started");
 
-
     cli_.run();
 
     transport_.stop();
     logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
     logger_.log("CLIENT", "-", "EXIT",  "Program terminated");
 }
-
-
 
 void SIPClient::send_to_server(const std::string& message)
 {
@@ -61,12 +83,12 @@ std::pair<bool, std::string> SIPClient::register_response_snapshot() const
              receiver_.get_register_response() };
 }
 
-std::string SIPClient::build_register_message(const std::string& username,const std::string& domain)
+std::string SIPClient::build_register_message(const std::string& username, const std::string& domain)
 {
-    return factory_.build_register(username,domain);
+    return factory_.build_register(username, domain);
 }
 
-SIPStateManager& SIPClient::state()
+SIPClientStateManager& SIPClient::state()
 {
     return state_;
 }
@@ -76,13 +98,11 @@ common::Logger& SIPClient::logger()
     return logger_;
 }
 
-
 void SIPClient::do_register(const std::string& username,
                              const std::string& domain)
 {
     register_handler_.handle_register(username, domain);
 }
-
 
 void SIPClient::on_packet_received(const std::string& data,
                                     const std::string& sender_ip,

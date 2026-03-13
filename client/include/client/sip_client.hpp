@@ -6,7 +6,7 @@
 #include "networking/udp_transport.hpp"
 #include "client/sip_message_factory.hpp"
 #include "client/sip_receive_handler.hpp"
-#include "client/sip_state_manager.hpp"
+#include "client/sip_client_state_manager.hpp"
 #include "client/sip_register_handler.hpp"
 #include "client/cli_handler.hpp"
 
@@ -31,7 +31,7 @@ public:
 
     void do_register(const std::string& username, const std::string& domain);
 
-    SIPStateManager& state();
+    SIPClientStateManager& state();
 
     common::Logger& logger();
 
@@ -47,7 +47,7 @@ private:
     UdpTransport         transport_;
     SIPMessageFactory    factory_;
     SIPReceiveHandler    receiver_;
-    SIPStateManager      state_;
+    SIPClientStateManager      state_;
     SIPRegisterHandler   register_handler_;
     CLIHandler           cli_;
 };
