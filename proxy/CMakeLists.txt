@@ -6,6 +6,7 @@ add_library(proxy
         src/call_state.cpp
         include/proxy/call_state_machine.hpp
         src/call_state_machine.cpp
+        src/sip_router.cpp
         include/proxy/call_session.hpp
         src/call_session.cpp)
 

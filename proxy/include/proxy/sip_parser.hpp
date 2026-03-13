@@ -13,16 +13,16 @@ namespace proxy {
 
 class SIPParser {
 public:
-  static common::SIPMessage parse(const std::string& raw_message);
+    static common::SIPMessage parse(const std::string& raw_message);
 
 private:
-  static void parse_start_line(common::SIPMessage& message,
-                               const std::string& line);
-
-  static void parse_header_line(common::SIPMessage& message,
+    static void parse_start_line(common::SIPMessage& message,
                                 const std::string& line);
 
-  static std::string trim(const std::string& value);
+    static void parse_header_line(common::SIPMessage& message,
+                                    const std::string& line);
+
+    static std::string trim(const std::string& value);
 };
 
 } // namespace proxy
