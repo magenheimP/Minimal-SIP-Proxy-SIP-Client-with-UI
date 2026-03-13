@@ -18,6 +18,9 @@ namespace common {
         std::string get_header(const std::string& name) const;
         void set_header(const std::string& name, const std::string& value);
         void add_header(const std::string& name, const std::string& value);
+        bool has_header(const std::string& name) const;
+        bool is_request() const;
+        bool is_response() const;
 
         std::string serialize() const;
 
