@@ -61,10 +61,9 @@ std::pair<bool, std::string> SIPClient::register_response_snapshot() const
              receiver_.get_register_response() };
 }
 
-std::string SIPClient::build_register_message(const std::string& username,
-                                               const std::string& domain)
+std::string SIPClient::build_register_message(const std::string& username,const std::string& domain)
 {
-    return factory_.build_register(username, domain);
+    return factory_.build_register(username,domain);
 }
 
 SIPStateManager& SIPClient::state()
