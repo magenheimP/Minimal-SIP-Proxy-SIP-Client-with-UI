@@ -1,7 +1,6 @@
 #include "proxy/call_state.hpp"
 
 namespace proxy {
-
     std::string to_string(const CallState state)
     {
         switch (state)
