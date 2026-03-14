@@ -1,39 +1,26 @@
-
 #pragma once
 #include <string>
 #include <mutex>
 #include <condition_variable>
+#include <algorithm>
 
 class SIPReceiveHandler {
 public:
-    std::mutex mtx;
-    std::condition_variable cv;
-    bool register_response_received = false;
-    std::string register_response;
+    SIPReceiveHandler() = default;
 
-    void handle_receive(const std::string& data) {
-        std::string tmp = data;
-        std::transform(tmp.begin(), tmp.end(), tmp.begin(), ::toupper); // case-insensitive
+    void handle_receive(const std::string& data);
 
-        if ((tmp.find("SIP/2.0") != std::string::npos) &&
-            ((tmp.find("200 OK") != std::string::npos) || (tmp.find("401") != std::string::npos))) {
-            std::lock_guard<std::mutex> lock(mtx);
-            register_response_received = true;
-            register_response = data;
+    bool wait_for_response(int timeout_seconds);
 
-            cv.notify_one();
-            }
-    }
+    void reset();
 
-    bool wait_for_response(int timeout_seconds) {
-        std::unique_lock<std::mutex> lock(mtx);
-        return cv.wait_for(lock, std::chrono::seconds(timeout_seconds),
-                           [this] { return register_response_received; });
-    }
+    bool        get_register_received() const;
+    std::string get_register_response() const;
 
-    void reset() {
-        std::lock_guard<std::mutex> lock(mtx);
-        register_response_received = false;
-        register_response.clear();
-    }
+    mutable std::mutex mtx;
+
+private:
+    std::condition_variable cv_;
+    bool        register_response_received_ = false;
+    std::string register_response_;
 };

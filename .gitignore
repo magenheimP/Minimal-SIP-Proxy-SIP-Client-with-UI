@@ -103,3 +103,5 @@ temp/
 
 
 /local_tests/
+
+ui/third_party/emWin/
