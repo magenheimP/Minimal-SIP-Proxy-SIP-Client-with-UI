@@ -13,7 +13,7 @@ int main(){
 
     cout << "THREAD POOL TESTS"<<endl<<endl;
 
-    const size_t num_threads = 20;
+    const size_t num_threads = 4;
     const int num_tasks_test1 = 100;
     const int num_tasks_test2 = 1000;
 
