@@ -3,30 +3,6 @@
 #include <stdexcept>
 #include <cstdlib>
 
-int main(int argc, char* argv[])
-{
-    if (argc != 3) {
-        std::cerr << "Usage: " << argv[0] << " <server_ip> <server_port>\n";
-        std::cerr << "Example: " << argv[0] << " 127.0.0.1 5060\n";
-        return 1;
-    }
-
-    const std::string server_ip   = argv[1];
-    const int         server_port = std::stoi(argv[2]);
-
-    try {
-        common::Logger::instance("client.log")
-               .log("MAIN", "-", "START", "Client starting");
-        SIPClient client(server_ip, server_port);
-        client.run();
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << "\n";
-        return 1;
-    }
-    return 0;
-}
-
 SIPClient::SIPClient(const std::string& server_ip, int server_port)
     : server_ip_(server_ip)
     , server_port_(server_port)
@@ -57,7 +33,9 @@ void SIPClient::run()
 
     cli_.run();
 
-
+    transport_.stop();
+    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    logger_.log("CLIENT", "-", "EXIT",  "Program terminated");
 }
 
 void SIPClient::send_to_server(const std::string& message)
@@ -115,11 +93,31 @@ void SIPClient::on_packet_received(const std::string& data,
               << data << "\n> " << std::flush;
 
     receiver_.handle_receive(data);
-}
 
-SIPClient::~SIPClient()
-{
+
+    if (register_response_cb_ && receiver_.get_register_received()) {
+        const std::string response = receiver_.get_register_response();
+        const bool success = response.find("SIP/2.0 200 OK") != std::string::npos;
+        register_response_cb_(success, response);
+    }
+}
+void SIPClient::start_transport() {
+    transport_.start(
+        0,
+        [this](const std::string& data,
+               const std::string& sender_ip,
+               uint16_t           sender_port)
+        {
+            on_packet_received(data, sender_ip, sender_port);
+        }
+    );
+    logger_.log("NETWORK", "-", "READY", "UDP transport started");
+}
+void SIPClient::stop_transport() {
     transport_.stop();
     logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
-    logger_.log("CLIENT", "-", "EXIT", "Program terminated");
+}
+
+void SIPClient::set_register_response_callback(ResponseCallback cb) {
+    register_response_cb_ = std::move(cb);
 }

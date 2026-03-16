@@ -20,9 +20,16 @@ public:
 
     void send_to_server(const std::string& message);
 
+    void stop_transport();
+
     bool wait_for_register_response(int timeout_seconds);
 
     void reset_receive_state();
+
+    using ResponseCallback = std::function<void(bool, const std::string&)>;
+    void set_register_response_callback(ResponseCallback cb);
+    void start_transport();
+
 
     std::pair<bool, std::string> register_response_snapshot() const;
 
@@ -36,6 +43,8 @@ public:
     common::Logger& logger();
 
 private:
+
+    ResponseCallback register_response_cb_;
     void on_packet_received(const std::string& data,
                             const std::string& sender_ip,
                             uint16_t           sender_port);

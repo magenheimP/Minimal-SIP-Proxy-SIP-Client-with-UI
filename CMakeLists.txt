@@ -35,7 +35,6 @@ endif()
 
 # Enable testing
 enable_testing()
-
 # Subdirectories
 add_subdirectory(common)
 add_subdirectory(networking)
