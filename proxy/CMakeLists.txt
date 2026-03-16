@@ -8,7 +8,9 @@ add_library(proxy
         src/call_state_machine.cpp
         src/sip_router.cpp)
         include/proxy/call_session.hpp
-        src/call_session.cpp)
+        src/call_session.cpp
+        include/proxy/call_registry.hpp
+        src/call_registry.cpp)
 
 target_include_directories(proxy
         PUBLIC
