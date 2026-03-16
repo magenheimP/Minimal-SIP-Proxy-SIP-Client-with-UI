@@ -5,7 +5,9 @@ add_library(proxy
         include/proxy/call_state.hpp
         src/call_state.cpp
         include/proxy/call_state_machine.hpp
-        src/call_state_machine.cpp)
+        src/call_state_machine.cpp
+        include/proxy/call_session.hpp
+        src/call_session.cpp)
 
 target_include_directories(proxy
         PUBLIC
