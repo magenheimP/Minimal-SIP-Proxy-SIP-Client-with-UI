@@ -17,3 +17,13 @@ target_link_libraries(register_tests
         proxy
         common
 )
+
+add_executable(thread_pool_tests
+        thread_pool_tests.cpp
+)
+
+target_link_libraries(thread_pool_tests
+        PRIVATE
+        proxy
+        common
+)
