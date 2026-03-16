@@ -13,6 +13,6 @@ namespace proxy {
         TERMINATED
     };
 
-    const std::string to_string(CallState state);
+    std::string to_string(CallState state);
 
 }
