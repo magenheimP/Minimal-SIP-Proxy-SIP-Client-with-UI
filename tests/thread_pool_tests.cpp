@@ -7,17 +7,23 @@
 #include <atomic>
 #include <chrono>
 
+using namespace std;
+
 int main(){
 
     cout << "THREAD POOL TESTS"<<endl<<endl;
+
+    const size_t num_threads = 20;
+    const int num_tasks_test1 = 100;
+    const int num_tasks_test2 = 1000;
 
     {
         cout<<"TEST1 BASIC TEST"<<endl;
 
         atomic<int> counter = 0;
-        ThreadPool pool(4);
+        ThreadPool pool(num_threads);
 
-        for(int i = 0; i < 100;i++){
+        for(int i = 0; i < num_tasks_test1;i++){
             pool.enqueue([&counter]()
             {
                 counter.fetch_add(1);
@@ -26,13 +32,13 @@ int main(){
 
         pool.shutdown();
 
-        if (counter.load() == 100)
+        if (counter.load() == num_tasks_test1)
         {
-            cout<<"Test1 passed "<< counter.load()<<"/100"<<endl<<endl;
+            cout<<"Test1 passed "<< counter.load()<<"/"<<num_tasks_test1<<endl<<endl;
         }
         else
         {
-            cout<<"Test1 failed "<< counter.load()<<"/100"<<endl<<endl;
+            cout<<"Test1 failed "<< counter.load()<<"/"<<num_tasks_test1<<endl<<endl;
         }
     }
 
@@ -40,9 +46,9 @@ int main(){
         cout<<"TEST2 SHUTDOWN WHILE BUSY TEST"<<endl;
 
         atomic<int> counter = 0;
-        ThreadPool pool(4);
+        ThreadPool pool(num_threads);
 
-        for (int i = 0; i < 1000; i++)
+        for (int i = 0; i < num_tasks_test2; i++)
         {
             pool.enqueue([&counter]() {
                 std::this_thread::sleep_for(std::chrono::microseconds(10));
@@ -52,14 +58,14 @@ int main(){
 
         pool.shutdown();
 
-        cout << "Test2 passed "<< counter.load() << "/1000" << endl<<endl;
+        cout << "Test2 passed "<< counter.load() << "/"<<num_tasks_test2 << endl<<endl;
     }
 
     {
         cout<<"TEST3 ENQUEUE AFTER SHUTDOWN TEST"<<endl;
 
         atomic<int> counter = 0;
-        ThreadPool pool(4);
+        ThreadPool pool(num_threads);
         pool.shutdown();
 
         pool.enqueue([&counter]() {
@@ -68,7 +74,7 @@ int main(){
 
         if (counter.load() == 0)
         {
-            cout<<"Test3 passsed"<<endl;
+            cout<<"Test3 passed"<<endl;
         }
         else
         {
