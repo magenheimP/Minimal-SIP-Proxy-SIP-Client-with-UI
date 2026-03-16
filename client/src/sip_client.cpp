@@ -57,9 +57,7 @@ void SIPClient::run()
 
     cli_.run();
 
-    transport_.stop();
-    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
-    logger_.log("CLIENT", "-", "EXIT",  "Program terminated");
+
 }
 
 void SIPClient::send_to_server(const std::string& message)
@@ -117,4 +115,11 @@ void SIPClient::on_packet_received(const std::string& data,
               << data << "\n> " << std::flush;
 
     receiver_.handle_receive(data);
+}
+
+SIPClient::~SIPClient()
+{
+    transport_.stop();
+    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    logger_.log("CLIENT", "-", "EXIT", "Program terminated");
 }

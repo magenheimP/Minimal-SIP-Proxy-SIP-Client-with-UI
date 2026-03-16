@@ -1,5 +1,4 @@
-add_library(ui INTERFACE
-        main.cpp)
+add_library(ui INTERFACE)
 
 target_link_libraries(ui
         INTERFACE

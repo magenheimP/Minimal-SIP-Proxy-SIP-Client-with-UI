@@ -14,7 +14,7 @@
 class SIPClient {
 public:
     SIPClient(const std::string& server_ip, int server_port);
-    ~SIPClient() = default;
+    ~SIPClient();
 
     void run();
 
