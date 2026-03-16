@@ -11,6 +11,17 @@ namespace proxy
     {
         std::lock_guard<std::mutex> lock(m_mutex);
 
+        if (m_calls.contains(call_id)) {
+            return m_calls[call_id];
+
+            common::Logger::instance().log(
+            "Proxy",
+            call_id,
+            "UNKNOWN",
+            "Call already exists"
+);
+        }
+
         auto session = std::make_shared<CallSession>(call_id, caller, callee);
 
         m_calls[call_id] = session;
