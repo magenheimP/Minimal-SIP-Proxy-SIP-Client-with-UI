@@ -8,8 +8,8 @@
 #include "client/sip_receive_handler.hpp"
 #include "client/sip_client_state_manager.hpp"
 #include "client/sip_register_handler.hpp"
+#include "client/sip_invite_handler.hpp"
 #include "client/cli_handler.hpp"
-
 
 class SIPClient {
 public:
@@ -19,26 +19,31 @@ public:
     void run();
 
     void send_to_server(const std::string& message);
+    const std::string& local_ip() const;
 
     bool wait_for_register_response(int timeout_seconds);
-
     void reset_receive_state();
 
     using ResponseCallback = std::function<void(bool, const std::string&)>;
     void set_register_response_callback(ResponseCallback cb);
     void start_transport();
-
-
+    
     std::pair<bool, std::string> register_response_snapshot() const;
-
     std::string build_register_message(const std::string& username,
                                        const std::string& domain);
-
     void do_register(const std::string& username, const std::string& domain);
 
-    SIPClientStateManager& state();
 
-    common::Logger& logger();
+    void do_invite(const std::string& from_user,
+                   const std::string& from_domain,
+                   const std::string& to_user,
+                   const std::string& to_domain);
+    void do_bye();
+
+
+    SIPClientStateManager& state();
+    common::Logger&        logger();
+    SIPMessageFactory&     factory();
 
 private:
 
@@ -47,14 +52,15 @@ private:
                             const std::string& sender_ip,
                             uint16_t           sender_port);
 
-    std::string server_ip_;
-    int         server_port_;
+    std::string            server_ip_;
+    int                    server_port_;
 
-    common::Logger&      logger_;
-    UdpTransport         transport_;
-    SIPMessageFactory    factory_;
-    SIPReceiveHandler    receiver_;
-    SIPClientStateManager      state_;
-    SIPRegisterHandler   register_handler_;
-    CLIHandler           cli_;
+    common::Logger&        logger_;
+    UdpTransport           transport_;
+    SIPMessageFactory      factory_;
+    SIPReceiveHandler      receiver_;
+    SIPClientStateManager  state_;
+    SIPRegisterHandler     register_handler_;
+    SIPInviteHandler       invite_handler_;
+    CLIHandler             cli_;
 };

@@ -13,6 +13,6 @@ private:
     bool prompt(const std::string& prompt_text, std::string& out) const;
 
     void handle_register_command();
-
+    void handle_call_command();
     SIPClient& client_;
 };

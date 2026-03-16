@@ -16,6 +16,16 @@ public:
 
     std::string build_register(const std::string& username,
                                                const std::string& domain);
+    std::string new_call_id() const;
+    std::string build_invite(const std::string& from_user, const std::string& from_domain,
+                          const std::string& to_user,   const std::string& to_domain,
+                          const std::string& call_id);
+    std::string build_ack   (const std::string& from_user, const std::string& from_domain,
+                              const std::string& to_user,   const std::string& to_domain,
+                              const std::string& call_id);
+    std::string build_bye   (const std::string& from_user, const std::string& from_domain,
+                              const std::string& to_user,   const std::string& to_domain,
+                              const std::string& call_id);
 
 private:
     std::string serialize(const common::SIPMessage& msg) const;

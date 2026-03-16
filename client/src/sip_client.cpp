@@ -12,6 +12,7 @@ SIPClient::SIPClient(const std::string& server_ip, int server_port)
     , receiver_()
     , state_()
     , register_handler_(*this)
+    , invite_handler_(*this)
     , cli_(*this)
 {
     logger_.log("CLIENT", "-", "STARTUP", "SIPClient constructed");
@@ -77,7 +78,7 @@ void SIPClient::on_packet_received(const std::string& data,
               << data << "\n> " << std::flush;
 
     receiver_.handle_receive(data);
-
+    invite_handler_.on_message(data);
 
     if (register_response_cb_ && receiver_.get_register_received()) {
         const std::string response = receiver_.get_register_response();
@@ -100,6 +101,23 @@ void SIPClient::start_transport() {
 
 void SIPClient::set_register_response_callback(ResponseCallback cb) {
     register_response_cb_ = std::move(cb);
+
+}
+const std::string& SIPClient::local_ip() const { return server_ip_; }
+SIPMessageFactory& SIPClient::factory()         { return factory_; }
+
+void SIPClient::do_invite(const std::string& from_user,
+                           const std::string& from_domain,
+                           const std::string& to_user,
+                           const std::string& to_domain)
+{
+    invite_handler_.handle_invite(from_user, from_domain, to_user, to_domain);
+}
+
+void SIPClient::do_bye()
+{
+    invite_handler_.handle_bye();
+
 }
 
 SIPClient::~SIPClient()

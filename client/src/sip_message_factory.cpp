@@ -15,6 +15,11 @@ SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port
     register_call_id_ = std::to_string(std::rand() % 1000000) + "@" + local_ip_;
 }
 
+std::string SIPMessageFactory::new_call_id() const
+{
+    return std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+}
+
 std::string SIPMessageFactory::build(const std::string& method,
                                      const std::string& from_username,
                                      const std::string& from_domain,
@@ -69,4 +74,31 @@ std::string SIPMessageFactory::build_register(const std::string& username,
                                                const std::string& domain)
 {
     return build("REGISTER", username, domain, username, domain);
+}
+
+std::string SIPMessageFactory::build_invite(const std::string& from_user,
+                                             const std::string& from_domain,
+                                             const std::string& to_user,
+                                             const std::string& to_domain,
+                                             const std::string& call_id)
+{
+    return build("INVITE", from_user, from_domain, to_user, to_domain, call_id);
+}
+
+std::string SIPMessageFactory::build_ack(const std::string& from_user,
+                                          const std::string& from_domain,
+                                          const std::string& to_user,
+                                          const std::string& to_domain,
+                                          const std::string& call_id)
+{
+    return build("ACK", from_user, from_domain, to_user, to_domain, call_id);
+}
+
+std::string SIPMessageFactory::build_bye(const std::string& from_user,
+                                          const std::string& from_domain,
+                                          const std::string& to_user,
+                                          const std::string& to_domain,
+                                          const std::string& call_id)
+{
+    return build("BYE", from_user, from_domain, to_user, to_domain, call_id);
 }

@@ -46,3 +46,49 @@ void SIPClientStateManager::transition_to_unlocked(State s)
 {
     state_ = s;
 }
+
+bool SIPClientStateManager::is_in_call() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return state_ == State::InCall;
+}
+bool SIPClientStateManager::is_ringing() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return state_ == State::Ringing;
+}
+bool SIPClientStateManager::is_calling() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return state_ == State::Calling;
+}
+
+std::string SIPClientStateManager::active_call_id() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return active_call_id_;
+}
+std::string SIPClientStateManager::active_remote_uri() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return active_remote_uri_;
+}
+
+void SIPClientStateManager::on_calling(const std::string& call_id,
+                                        const std::string& remote_uri)
+{
+    std::lock_guard<std::mutex> lock(mtx_);
+    active_call_id_    = call_id;
+    active_remote_uri_ = remote_uri;
+    transition_to_unlocked(State::Calling);
+}
+
+void SIPClientStateManager::on_ringing() {
+    transition_to(State::Ringing);
+}
+
+void SIPClientStateManager::on_call_established() {
+    transition_to(State::InCall);
+}
+
+void SIPClientStateManager::on_call_terminated() {
+    std::lock_guard<std::mutex> lock(mtx_);
+    active_call_id_.clear();
+    active_remote_uri_.clear();
+    transition_to_unlocked(State::Registered);
+}
