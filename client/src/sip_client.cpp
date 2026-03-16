@@ -19,23 +19,7 @@ SIPClient::SIPClient(const std::string& server_ip, int server_port)
 
 void SIPClient::run()
 {
-    transport_.start(
-        0,
-        [this](const std::string& data,
-               const std::string& sender_ip,
-               uint16_t           sender_port)
-        {
-            on_packet_received(data, sender_ip, sender_port);
-        }
-    );
-
-    logger_.log("NETWORK", "-", "READY", "UDP transport started");
-
     cli_.run();
-
-    transport_.stop();
-    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
-    logger_.log("CLIENT", "-", "EXIT",  "Program terminated");
 }
 
 void SIPClient::send_to_server(const std::string& message)
