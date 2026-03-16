@@ -21,8 +21,7 @@ void UdpTransport::start(uint16_t port,
     callback = cb;
 
     if (!socket.bind(port)) {
-        std::cerr << "Failed to bind UDP socket\n";
-        return;
+        throw std::runtime_error("Failed to bind UDP socket");
     }
 
     running = true;
