@@ -96,7 +96,12 @@ void SIPClient::start_transport() {
             on_packet_received(data, sender_ip, sender_port);
         }
     );
-    logger_.log("NETWORK", "-", "READY", "UDP transport started");
+
+    factory_.set_local_port(transport_.local_port());
+
+    logger_.log("NETWORK", "-", "READY",
+        "UDP transport started on port "
+        + std::to_string(transport_.local_port()));
 }
 
 void SIPClient::set_register_response_callback(ResponseCallback cb) {
@@ -119,7 +124,13 @@ void SIPClient::do_bye()
     invite_handler_.handle_bye();
 
 }
+void SIPClient::do_answer() {
+    invite_handler_.handle_answer();
+}
 
+void SIPClient::do_reject() {
+    invite_handler_.handle_reject();
+}
 SIPClient::~SIPClient()
 {
     transport_.stop();

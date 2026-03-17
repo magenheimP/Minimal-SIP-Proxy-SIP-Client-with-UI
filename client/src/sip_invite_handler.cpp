@@ -54,7 +54,7 @@ void SIPInviteHandler::handle_bye()
     const std::string call_id    = state.active_call_id();
     const std::string remote_uri = state.active_remote_uri();
 
-    const std::string local = state.registered_user(); // "user@domain"
+    const std::string local = state.registered_user();
     const auto at1           = local.find('@');
     const std::string from_user   = local.substr(0, at1);
     const std::string from_domain = local.substr(at1 + 1);
@@ -75,31 +75,123 @@ void SIPInviteHandler::on_message(const std::string& raw)
 {
     std::string upper = raw;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
-    if (upper.rfind("SIP/2.0", 0) == std::string::npos) return;
 
-    // Only process if the call id matches our active call
+
+    if (upper.rfind("INVITE", 0) != std::string::npos) {
+        handle_incoming_invite(raw);
+        return;
+    }
+
+
+    if (upper.rfind("BYE", 0) != std::string::npos) {
+        handle_incoming_bye(raw);
+        return;
+    }
+
+
+    if (upper.find("SIP/2.0") == std::string::npos) return;
+
     const std::string msg_call_id = extract_call_id(raw);
     if (msg_call_id.empty()) return;
     if (msg_call_id != client_.state().active_call_id()) return;
 
     const int code = extract_status_code(raw);
-
     switch (code) {
-        case 100: handle_100();          break;
-        case 180: handle_180();          break;
-        case 200:
-
-            if (client_.state().is_in_call())
-                handle_200_ok_bye();
-            else
-                handle_200_ok_invite();
-            break;
-        default:
+    case 100: handle_100();        break;
+    case 180: handle_180();        break;
+    case 200:
+        if (client_.state().is_in_call())
+            handle_200_ok_bye();
+        else
+            handle_200_ok_invite();
+        break;
+    default:
         if (code >= 400) handle_error(code);
         break;
     }
 }
 
+void SIPInviteHandler::handle_incoming_invite(const std::string& raw)
+{
+    const std::string call_id = extract_call_id(raw);
+    if (call_id.empty()) return;
+
+
+    std::regex from_re(R"(From:\s*<sip:([^@]+)@([^>]+)>)", std::regex::icase);
+    std::smatch m;
+    std::string caller = "unknown";
+    if (std::regex_search(raw, m, from_re))
+        caller = m[1].str() + "@" + m[2].str();
+
+
+    const std::string remote_uri = "sip:" + caller;
+    client_.state().on_calling(call_id, remote_uri);
+
+
+    const std::string trying = client_.factory().build_response(100, "Trying", raw);
+    client_.send_to_server(trying);
+    client_.logger().log("CALL", call_id, "100_TRYING_SENT", caller);
+
+
+    const std::string ringing = client_.factory().build_response(180, "Ringing", raw);
+    client_.send_to_server(ringing);
+    client_.logger().log("CALL", call_id, "180_RINGING_SENT", caller);
+
+    std::cout << "\nIncoming call from " << caller
+              << "  [call-id: " << call_id << "]\n"
+              << "Type 'answer' to accept or 'reject' to decline.\n> "
+              << std::flush;
+
+    pending_invite_ = raw;
+}
+
+void SIPInviteHandler::handle_incoming_bye(const std::string& raw)
+{
+    const std::string call_id = extract_call_id(raw);
+    if (call_id.empty()) return;
+    if (call_id != client_.state().active_call_id()) return;
+
+    const std::string ok = client_.factory().build_response(200, "OK", raw);
+    client_.send_to_server(ok);
+
+    client_.state().on_call_terminated();
+    client_.logger().log("CALL", call_id, "CALL_TERMINATED", "remote BYE");
+    std::cout << "\n[" << call_id << "] Remote party hung up.\n> " << std::flush;
+}
+void SIPInviteHandler::handle_answer()
+{
+    if (pending_invite_.empty()) {
+        std::cout << "No incoming call to answer.\n";
+        return;
+    }
+
+    const std::string call_id = extract_call_id(pending_invite_);
+    const std::string ok = client_.factory().build_response(200, "OK", pending_invite_);
+    client_.send_to_server(ok);
+
+    client_.state().on_call_established();
+    client_.logger().log("CALL", call_id, "200_OK_SENT", "call answered");
+    std::cout << "[" << call_id << "] Call answered. Call active.\n> " << std::flush;
+
+    pending_invite_.clear();
+}
+void SIPInviteHandler::handle_reject()
+{
+    if (pending_invite_.empty()) {
+        std::cout << "No incoming call to reject.\n";
+        return;
+    }
+
+    const std::string call_id = extract_call_id(pending_invite_);
+    const std::string busy = client_.factory().build_response(486, "Busy Here", pending_invite_);
+    client_.send_to_server(busy);
+
+    client_.state().on_call_terminated();
+    client_.logger().log("CALL", call_id, "486_SENT", "call rejected");
+    std::cout << "[" << call_id << "] Call rejected.\n> " << std::flush;
+
+    pending_invite_.clear();
+}
 
 void SIPInviteHandler::handle_100()
 {

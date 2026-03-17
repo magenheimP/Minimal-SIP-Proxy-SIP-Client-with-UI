@@ -45,7 +45,11 @@ void CLIHandler::run()
             handle_call_command();
         } else if (cmd == "hangup") {
             client_.do_bye();
-        } else if (cmd == "help") {
+        }else if (cmd == "answer") {
+            client_.do_answer();
+        } else if (cmd == "reject") {
+            client_.do_reject();
+        }else if (cmd == "help") {
             std::cout << "Commands: register, call, hangup, status, exit\n";
         } else {
             log.log("CLI", "-", "UNKNOWN_COMMAND", cmd);
@@ -77,6 +81,7 @@ void CLIHandler::handle_register_command()
 
     client_.do_register(username, domain);
 }
+
 void CLIHandler::handle_call_command()
 {
     const std::string reg = client_.state().registered_user();

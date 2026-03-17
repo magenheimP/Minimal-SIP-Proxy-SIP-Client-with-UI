@@ -32,7 +32,8 @@ public:
     std::string build_register_message(const std::string& username,
                                        const std::string& domain);
     void do_register(const std::string& username, const std::string& domain);
-
+    void do_reject();
+    void do_answer();
 
     void do_invite(const std::string& from_user,
                    const std::string& from_domain,

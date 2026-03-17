@@ -13,10 +13,14 @@ public:
                        const std::string& to_domain);
 
     void handle_bye();
-
+    void handle_reject();
+    void handle_incoming_invite(const std::string& raw);
+    void handle_incoming_bye(const std::string& raw);
+    void handle_answer();
     void on_message(const std::string& raw);
 
 private:
+    std::string pending_invite_;
     void handle_100();
     void handle_180();
     void handle_200_ok_invite();

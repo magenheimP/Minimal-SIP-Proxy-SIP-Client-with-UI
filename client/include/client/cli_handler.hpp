@@ -6,7 +6,6 @@ class SIPClient;
 class CLIHandler {
 public:
     explicit CLIHandler(SIPClient& client);
-
     void run();
 
 private:
@@ -14,5 +13,6 @@ private:
 
     void handle_register_command();
     void handle_call_command();
+
     SIPClient& client_;
 };

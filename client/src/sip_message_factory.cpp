@@ -2,6 +2,7 @@
 #include <sstream>
 #include <ctime>
 #include <cstdlib>
+#include <regex>
 #include <unordered_map>
 #include <stdexcept>
 
@@ -18,6 +19,9 @@ SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port
 std::string SIPMessageFactory::new_call_id() const
 {
     return std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+}
+void SIPMessageFactory::set_local_port(uint16_t port) {
+    local_port_ = port;
 }
 
 std::string SIPMessageFactory::build(const std::string& method,
@@ -44,7 +48,7 @@ std::string SIPMessageFactory::build(const std::string& method,
     msg.add_header("Call-ID", effective_call_id);
     msg.add_header("CSeq",    std::to_string(cseq_++) + " " + method);
 
-    //check this again
+
     if (is_register || method == "INVITE")
         msg.add_header("Contact", "<sip:" + from_username + "@" + local_ip_ + ":" + std::to_string(local_port_) + ">");
     msg.add_header("Content-Length", body.empty() ? "0" : std::to_string(body.size()));
@@ -101,4 +105,28 @@ std::string SIPMessageFactory::build_bye(const std::string& from_user,
                                           const std::string& call_id)
 {
     return build("BYE", from_user, from_domain, to_user, to_domain, call_id);
+}
+
+std::string SIPMessageFactory::build_response(int code,
+                                               const std::string& reason,
+                                               const std::string& request_raw)
+{
+
+    auto get_header = [&](const std::string& name) -> std::string {
+        std::regex re(name + R"(\s*:\s*(.+))", std::regex::icase);
+        std::smatch m;
+        if (std::regex_search(request_raw, m, re))
+            return m[1].str();
+        return {};
+    };
+
+    std::ostringstream oss;
+    oss << "SIP/2.0 " << code << " " << reason << "\r\n";
+    oss << "Via: "      << get_header("Via")     << "\r\n";
+    oss << "From: "     << get_header("From")    << "\r\n";
+    oss << "To: "       << get_header("To")      << "\r\n";
+    oss << "Call-ID: "  << get_header("Call-ID") << "\r\n";
+    oss << "CSeq: "     << get_header("CSeq")    << "\r\n";
+    oss << "Content-Length: 0\r\n\r\n";
+    return oss.str();
 }
