@@ -10,7 +10,9 @@ add_library(proxy
         include/proxy/call_session.hpp
         src/call_session.cpp
         include/proxy/call_registry.hpp
-        src/call_registry.cpp)
+        src/call_registry.cpp
+        include/proxy/sip_proxy.hpp
+        src/sip_proxy.cpp)
 
 target_include_directories(proxy
         PUBLIC
