@@ -4,6 +4,7 @@ add_library(client
         src/sip_receive_handler.cpp
         src/sip_client_state_manager.cpp
         src/sip_register_handler.cpp
+        src/cli_handler.cpp
 )
 
 target_include_directories(client
@@ -16,14 +17,4 @@ target_link_libraries(client
         common
         networking
         project_options
-)
-
-add_executable(client_cli
-        src/cli_handler.cpp
-)
-
-target_link_libraries(client_cli
-        client
-        common
-        networking
 )

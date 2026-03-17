@@ -24,6 +24,11 @@ public:
 
     void reset_receive_state();
 
+    using ResponseCallback = std::function<void(bool, const std::string&)>;
+    void set_register_response_callback(ResponseCallback cb);
+    void start_transport();
+
+
     std::pair<bool, std::string> register_response_snapshot() const;
 
     std::string build_register_message(const std::string& username,
@@ -36,6 +41,8 @@ public:
     common::Logger& logger();
 
 private:
+
+    ResponseCallback register_response_cb_;
     void on_packet_received(const std::string& data,
                             const std::string& sender_ip,
                             uint16_t           sender_port);
