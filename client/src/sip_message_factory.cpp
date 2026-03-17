@@ -44,9 +44,9 @@ std::string SIPMessageFactory::build(const std::string& method,
     msg.add_header("Call-ID", effective_call_id);
     msg.add_header("CSeq",    std::to_string(cseq_++) + " " + method);
 
-    if (is_register)
-        msg.add_header("Contact", "<sip:" + from_username + "@" + local_ip_ + ">");
-
+    //check this again
+    if (is_register || method == "INVITE")
+        msg.add_header("Contact", "<sip:" + from_username + "@" + local_ip_ + ":" + std::to_string(local_port_) + ">");
     msg.add_header("Content-Length", body.empty() ? "0" : std::to_string(body.size()));
 
     if (!body.empty())
