@@ -14,7 +14,12 @@ public:
                   const std::string& to_domain,
                   const std::string& call_id = {},
                   const std::string& body    = {});
-
+    std::string build_ack_for_error(const std::string& from_user,
+                                                    const std::string& from_domain,
+                                                    const std::string& to_user,
+                                                    const std::string& to_domain,
+                                                    const std::string& call_id,
+                                                    const std::string& error_response_raw);
     std::string build_register(const std::string& username,
                                                const std::string& domain);
     std::string new_call_id() const;
