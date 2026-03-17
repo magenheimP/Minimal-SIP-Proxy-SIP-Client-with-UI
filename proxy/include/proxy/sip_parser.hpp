@@ -7,7 +7,7 @@
 
 #include <string>
 
-#include "common/sip_message.hpp"
+#include "../../common/include/common/sip_message.hpp"
 
 namespace proxy {
 
@@ -21,6 +21,11 @@ private:
 
     static void parse_header_line(common::SIPMessage& message,
                                     const std::string& line);
+
+    static void parse_body(common::SIPMessage& message,
+                         const std::string& raw_body);
+
+    static int get_content_length(const common::SIPMessage& message);
 
     static std::string trim(const std::string& value);
 };
