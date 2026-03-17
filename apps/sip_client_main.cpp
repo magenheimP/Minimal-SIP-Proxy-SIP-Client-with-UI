@@ -29,24 +29,14 @@ int main(int argc, char* argv[])
              "Client starting in " + mode + " mode");
 
     try {
-
         SIPClient sip_client(server_ip, server_port);
 
         if (mode == "--cli") {
-
             sip_client.start_transport();
-
             sip_client.run();
-
-            sip_client.stop_transport();
-
-            common::Logger::instance()
-                .log("CLIENT", "-", "EXIT", "CLI client exited");
         }
         else {
-
             QApplication app(argc, argv);
-
             SipQtApp qt_app(sip_client);
 
             sip_client.set_register_response_callback(
@@ -57,22 +47,17 @@ int main(int argc, char* argv[])
             );
 
             sip_client.start_transport();
-
             qt_app.show();
 
             const int result = app.exec();
-
-            sip_client.stop_transport();
 
             common::Logger::instance()
                 .log("CLIENT", "-", "EXIT", "Qt client exited");
 
             return result;
         }
-
     }
     catch (const std::exception& e) {
-
         std::cerr << "Fatal error: " << e.what() << "\n";
         return 1;
     }

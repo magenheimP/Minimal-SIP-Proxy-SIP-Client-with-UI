@@ -14,13 +14,11 @@
 class SIPClient {
 public:
     SIPClient(const std::string& server_ip, int server_port);
-    ~SIPClient() = default;
+    ~SIPClient();
 
     void run();
 
     void send_to_server(const std::string& message);
-
-    void stop_transport();
 
     bool wait_for_register_response(int timeout_seconds);
 

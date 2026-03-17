@@ -97,11 +97,14 @@ void SIPClient::start_transport() {
     );
     logger_.log("NETWORK", "-", "READY", "UDP transport started");
 }
-void SIPClient::stop_transport() {
-    transport_.stop();
-    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
-}
 
 void SIPClient::set_register_response_callback(ResponseCallback cb) {
     register_response_cb_ = std::move(cb);
+}
+
+SIPClient::~SIPClient()
+{
+    transport_.stop();
+    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    logger_.log("CLIENT", "-", "EXIT", "Program terminated");
 }
