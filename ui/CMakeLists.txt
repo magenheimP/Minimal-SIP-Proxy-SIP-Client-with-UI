@@ -8,8 +8,10 @@ endif()
 
 add_library(ui
         src/registration_window.cpp
+        src/call_window.cpp
         src/sip_qt_app.cpp
         include/ui/registration_window.hpp
+        include/ui/call_window.hpp
         include/ui/sip_qt_app.hpp
 )
 

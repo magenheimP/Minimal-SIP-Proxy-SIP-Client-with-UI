@@ -75,6 +75,7 @@ void RegistrationWindow::on_register_response(bool success, const QString& raw_m
     register_btn_->setEnabled(true);
     if (success) {
         status_label_->setText("✓ Registered successfully");
+        emit registration_succeeded();
     } else {
         status_label_->setText("✗ Registration failed");
         QMessageBox::information(this, "SIP Response", raw_message);
