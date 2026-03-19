@@ -139,7 +139,19 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
         return result;
     }
-
+    if (caller == callee) {
+        common::Logger::instance("proxy.log").log(
+            "SIPRouter",
+            call_id,
+            "INVALID_CALL",
+            "Caller cannot call itself: " + caller
+        );
+        RoutingResult result;
+        result.action = RoutingAction::RespondLocally;
+        result.response = make_error_response("SIP/2.0 400 Bad Request", message);
+        result.user = caller;
+        return result;
+    }
     common::Logger::instance("proxy.log").log(
         "SIPRouter",
         call_id,

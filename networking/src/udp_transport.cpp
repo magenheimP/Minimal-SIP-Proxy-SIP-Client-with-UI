@@ -35,7 +35,9 @@ void UdpTransport::send(const std::string& data,
 
     socket.sendTo(data, ip, port);
 }
-
+uint16_t UdpTransport::local_port() const {
+    return socket.local_port();
+}
 void UdpTransport::stop() {
 
     running = false;

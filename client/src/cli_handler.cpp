@@ -41,7 +41,16 @@ void CLIHandler::run()
             log.log("CLIENT", "-", "SHUTDOWN", "User requested exit");
             std::cout << "Exiting.\n";
             running = false;
-
+        } else if (cmd == "call") {
+            handle_call_command();
+        } else if (cmd == "hangup") {
+            client_.do_bye();
+        }else if (cmd == "answer") {
+            client_.do_answer();
+        } else if (cmd == "reject") {
+            client_.do_reject();
+        }else if (cmd == "help") {
+            std::cout << "Commands: register, call, hangup, status, exit\n";
         } else {
             log.log("CLI", "-", "UNKNOWN_COMMAND", cmd);
             std::cout << "Unknown command: " << cmd
@@ -71,4 +80,20 @@ void CLIHandler::handle_register_command()
     if (!prompt("domain: ",   domain))   return;
 
     client_.do_register(username, domain);
+}
+
+void CLIHandler::handle_call_command()
+{
+    const std::string reg = client_.state().registered_user();
+    if (reg.empty()) { std::cout << "Not registered.\n"; return; }
+
+    const auto at       = reg.find('@');
+    const std::string from_user   = reg.substr(0, at);
+    const std::string from_domain = reg.substr(at + 1);
+
+    std::string to_user, to_domain;
+    if (!prompt("callee username: ", to_user))   return;
+    if (!prompt("callee domain: ",   to_domain)) return;
+
+    client_.do_invite(from_user, from_domain, to_user, to_domain);
 }

@@ -16,6 +16,8 @@ public:
     UdpTransport();
     ~UdpTransport();
 
+    uint16_t local_port() const;
+
     void start(uint16_t port, ReceiveCallback callback) override;
 
     void send(const std::string& data,

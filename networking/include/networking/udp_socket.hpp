@@ -15,6 +15,7 @@ public:
 
     bool bind(uint16_t port);
 
+    uint16_t local_port() const;
     ssize_t sendTo(const std::string& data,
                    const std::string& ip,
                    uint16_t port);

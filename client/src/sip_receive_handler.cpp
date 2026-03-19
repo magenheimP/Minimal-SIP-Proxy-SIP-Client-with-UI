@@ -5,14 +5,14 @@
 
 void SIPReceiveHandler::handle_receive(const std::string& data)
 {
-
     std::string upper = data;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
-    const bool is_sip_response = upper.find("SIP/2.0") != std::string::npos;
+    const bool is_sip_response  = upper.find("SIP/2.0") != std::string::npos;
     const bool is_register_reply =
-        upper.find("200 OK") != std::string::npos ||
-        upper.find("401")    != std::string::npos;
+        (upper.find("200 OK")  != std::string::npos ||
+         upper.find("401")     != std::string::npos) &&
+         upper.find("REGISTER") != std::string::npos;
 
     if (is_sip_response && is_register_reply) {
         std::lock_guard<std::mutex> lock(mtx);

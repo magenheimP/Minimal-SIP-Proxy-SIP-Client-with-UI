@@ -37,6 +37,13 @@ bool UdpSocket::bind(uint16_t port) {
                   sizeof(addr)) == 0;
 }
 
+uint16_t UdpSocket::local_port() const {
+    sockaddr_in addr{};
+    socklen_t len = sizeof(addr);
+    getsockname(socket_fd, (sockaddr*)&addr, &len);
+    return ntohs(addr.sin_port);
+}
+
 ssize_t UdpSocket::sendTo(const std::string& data,
                           const std::string& ip,
                           uint16_t port) {
