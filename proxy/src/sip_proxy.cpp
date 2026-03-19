@@ -70,6 +70,13 @@ namespace proxy {
         // Parse SIP message
         common::SIPMessage message = SIPParser::parse(pkt.data);
 
+        common::Logger::instance().log(
+            common::LogLevel::INFO,
+            "NETWORK",
+            message.get_header("Call-ID"),
+            "SIP_MESSAGE_IN",
+            message);
+
         // Route it
         RoutingResult result = router_.route(message, pkt.ip, pkt.port);
 
@@ -86,6 +93,15 @@ namespace proxy {
                 result.response.get_header("Call-ID"),
                 "SEND",
                 "Local response sent to " + pkt.ip);
+
+            common::Logger::instance().log(
+                common::LogLevel::INFO,
+                "NETWORK",
+                result.response.get_header("Call-ID"),
+                "SIP_MESSAGE_OUT",
+                result.response);
+
+            common::Logger::instance().separator();
             break;
 
         case RoutingAction::ForwardRequest:
@@ -109,6 +125,15 @@ namespace proxy {
                     result.message.get_header("Call-ID"),
                     "FORWARD",
                     "Forwarded request to " + ip + ":" + std::to_string(port));
+
+                common::Logger::instance().log(
+                    common::LogLevel::INFO,
+                    "NETWORK",
+                    result.message.get_header("Call-ID"),
+                    "SIP_MESSAGE_OUT",
+                    result.message);
+
+                common::Logger::instance().separator();
             } else {
                 transport_.send(
                     result.message.serialize(),
@@ -120,6 +145,15 @@ namespace proxy {
                     result.message.get_header("Call-ID"),
                     "FORWARD",
                     "Forwarded request to " + result.ip + ":" + std::to_string(result.port));
+
+                common::Logger::instance().log(
+                    common::LogLevel::INFO,
+                    "NETWORK",
+                    result.message.get_header("Call-ID"),
+                    "SIP_MESSAGE_OUT",
+                    result.message);
+
+                common::Logger::instance().separator();
             }
             break;
 
@@ -134,6 +168,15 @@ namespace proxy {
                 result.message.get_header("Call-ID"),
                 "FORWARD",
                 "Forwarded response to " + result.ip + ":" + std::to_string(result.port));
+
+            common::Logger::instance().log(
+                common::LogLevel::INFO,
+                "NETWORK",
+                result.message.get_header("Call-ID"),
+                "SIP_MESSAGE_OUT",
+                result.message);
+
+            common::Logger::instance().separator();
             break;
 
         case RoutingAction::Ignore:

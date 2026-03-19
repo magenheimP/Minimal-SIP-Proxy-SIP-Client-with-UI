@@ -68,6 +68,10 @@ void SIPInviteHandler::handle_bye()
 
     client_.logger().log("CALL", call_id, "BYE_SENT", remote_uri);
     client_.send_to_server(msg);
+
+    state.on_call_terminated();
+    client_.logger().log("CALL", call_id, "CALL_TERMINATED", "local BYE sent");
+
     std::cout << "BYE sent  [call-id: " << call_id << "]\n";
     client_.notify_call_state_changed();
 }
@@ -78,12 +82,15 @@ void SIPInviteHandler::on_message(const std::string& raw)
     std::string upper = raw;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
-    if (upper.rfind("INVITE", 0) != std::string::npos) {
+
+    const bool is_response = upper.rfind("SIP/2.0", 0) != std::string::npos;
+
+    if (!is_response && upper.rfind("INVITE", 0) != std::string::npos) {
         handle_incoming_invite(raw);
         return;
     }
 
-    if (upper.rfind("BYE", 0) != std::string::npos) {
+    if (!is_response && upper.rfind("BYE", 0) != std::string::npos) {
         handle_incoming_bye(raw);
         return;
     }
