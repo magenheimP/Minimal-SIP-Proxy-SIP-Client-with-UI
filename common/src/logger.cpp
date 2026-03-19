@@ -9,6 +9,17 @@
 
 namespace common {
 
+    std::string to_string(LogLevel level)
+    {
+        switch (level) {
+            case LogLevel::DEBUG: return "DEBUG";
+            case LogLevel::INFO:  return "INFO";
+            case LogLevel::WARN:  return "WARN";
+            case LogLevel::ERROR: return "ERROR";
+        }
+        return "UNKNOWN";
+    }
+
     Logger& Logger::instance(const std::string& filename)
     {
         static Logger logger(filename.empty() ? "default.log" : filename);
@@ -41,6 +52,74 @@ namespace common {
 
         std::string output = log_line.str();
 
+        //std::cout << output << std::endl;
+
+        if (m_file.is_open()) {
+            m_file << output << std::endl;
+            m_file.flush();
+        }
+    }
+
+    void Logger::log(LogLevel level, const std::string &component, const std::string &call_id, const std::string &state,
+        const std::string &message) {
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        std::ostringstream log_line;
+
+        log_line << "[" << to_string(level) << "] "
+               << "[" << component << "] "
+               << "[" << call_id << "] "
+               << "[" << state << "] "
+               << message;
+
+        std::string output = log_line.str();
+        //std::cout << output << std::endl;
+
+        if (m_file.is_open()) {
+            m_file << output << std::endl;
+            m_file.flush();
+        }
+
+    }
+
+    void Logger::log(LogLevel level, const std::string &component, const std::string &call_id, const std::string &state,
+        const common::SIPMessage &sip_message) {
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        std::ostringstream log_line;
+
+        log_line << "[" << to_string(level) << "] "
+       << "[" << component << "] "
+       << "[" << call_id << "] "
+       << "[" << state << "] "
+       << sip_message.serialize();
+
+        std::string output = log_line.str();
+        //std::cout << output << std::endl;
+
+        if (m_file.is_open()) {
+            m_file << output << std::endl;
+            m_file.flush();
+        }
+
+
+    }
+
+    void Logger::log(LogLevel level, const std::string &component, const std::string &call_id,
+        const common::SIPMessage &sip_message) {
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        std::ostringstream log_line;
+
+        log_line << "[" << to_string(level) << "] "
+       << "[" << component << "] "
+       << "[" << call_id << "] "
+       << sip_message.serialize();
+
+        std::string output = log_line.str();
         //std::cout << output << std::endl;
 
         if (m_file.is_open()) {
