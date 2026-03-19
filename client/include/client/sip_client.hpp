@@ -34,13 +34,18 @@ public:
     void do_register(const std::string& username, const std::string& domain);
     void do_reject();
     void do_answer();
-
+    using StateCallback = std::function<void(const std::string& state,
+                                              const std::string& call_id,
+                                              const std::string& remote_uri)>;
+    void set_call_state_callback(StateCallback cb);
+    void set_incoming_call_callback(std::function<void(const std::string& call_id,
+                                                        const std::string& caller)> cb);
     void do_invite(const std::string& from_user,
                    const std::string& from_domain,
                    const std::string& to_user,
                    const std::string& to_domain);
     void do_bye();
-
+    void notify_call_state_changed();
 
     SIPClientStateManager& state();
     common::Logger&        logger();
@@ -49,6 +54,8 @@ public:
 private:
 
     ResponseCallback register_response_cb_;
+    StateCallback call_state_cb_;
+    std::function<void(const std::string&, const std::string&)> incoming_call_cb_;
     void on_packet_received(const std::string& data,
                             const std::string& sender_ip,
                             uint16_t           sender_port);

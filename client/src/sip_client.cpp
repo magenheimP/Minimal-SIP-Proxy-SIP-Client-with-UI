@@ -80,10 +80,28 @@ void SIPClient::on_packet_received(const std::string& data,
     receiver_.handle_receive(data);
     invite_handler_.on_message(data);
 
+    if (call_state_cb_) {
+        call_state_cb_(
+            SIPClientStateManager::state_name(state_.get_state()),
+            state_.active_call_id(),
+            state_.active_remote_uri()
+        );
+    }
+
     if (register_response_cb_ && receiver_.get_register_received()) {
         const std::string response = receiver_.get_register_response();
         const bool success = response.find("SIP/2.0 200 OK") != std::string::npos;
         register_response_cb_(success, response);
+    }
+}
+
+void SIPClient::notify_call_state_changed() {
+    if (call_state_cb_) {
+        call_state_cb_(
+            SIPClientStateManager::state_name(state_.get_state()),
+            state_.active_call_id(),
+            state_.active_remote_uri()
+        );
     }
 }
 void SIPClient::start_transport() {
@@ -107,6 +125,15 @@ void SIPClient::start_transport() {
 void SIPClient::set_register_response_callback(ResponseCallback cb) {
     register_response_cb_ = std::move(cb);
 
+}
+
+void SIPClient::set_call_state_callback(StateCallback cb) {
+    call_state_cb_ = std::move(cb);
+}
+
+void SIPClient::set_incoming_call_callback(
+    std::function<void(const std::string&, const std::string&)> cb) {
+    incoming_call_cb_ = std::move(cb);
 }
 const std::string& SIPClient::local_ip() const { return server_ip_; }
 SIPMessageFactory& SIPClient::factory()         { return factory_; }

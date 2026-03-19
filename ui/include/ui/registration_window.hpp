@@ -11,7 +11,8 @@ class RegistrationWindow : public QWidget {
 
 public:
     explicit RegistrationWindow(SIPClient& client, QWidget* parent = nullptr);
-
+    signals:
+    void registration_succeeded();
 public slots:
     void on_register_response(bool success, const QString& raw_message);
 

@@ -22,6 +22,8 @@ public:
     bool        is_in_call()      const;
     bool        is_busy()         const;  // Calling || Ringing || InCall
 
+    static std::string state_name(State s);
+
     std::string registered_user()   const;
     std::string active_call_id()    const;
     std::string active_remote_uri() const;
@@ -44,7 +46,7 @@ public:
     void transition_to(State s);
 
 private:
-    static std::string state_name(State s);
+
 
     mutable std::mutex  mtx_;
     State               state_          { State::Idle };

@@ -39,6 +39,7 @@ void SIPInviteHandler::handle_invite(const std::string& from_user,
     client_.send_to_server(msg);
     std::cout << "INVITE sent to " << remote_uri
               << "  [call-id: " << call_id << "]\n";
+    client_.notify_call_state_changed();
 }
 
 
@@ -68,6 +69,7 @@ void SIPInviteHandler::handle_bye()
     client_.logger().log("CALL", call_id, "BYE_SENT", remote_uri);
     client_.send_to_server(msg);
     std::cout << "BYE sent  [call-id: " << call_id << "]\n";
+    client_.notify_call_state_changed();
 }
 
 
@@ -133,6 +135,7 @@ void SIPInviteHandler::handle_incoming_invite(const std::string& raw)
     const std::string remote_uri = "sip:" + caller;
 
     client_.state().on_incoming_call(call_id, remote_uri);
+    client_.notify_call_state_changed();
 
     const std::string trying = client_.factory().build_response(100, "Trying", raw);
     client_.send_to_server(trying);

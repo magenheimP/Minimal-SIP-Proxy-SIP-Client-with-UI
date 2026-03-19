@@ -45,7 +45,17 @@ int main(int argc, char* argv[])
                     qt_app.notify_register_response(ok, raw);
                 }
             );
+            sip_client.set_call_state_callback(
+            [&qt_app](const std::string& state,
+                   const std::string& call_id,
+                   const std::string& remote_uri) {
+                qt_app.notify_call_state(state, call_id, remote_uri);
+            });
 
+            sip_client.set_incoming_call_callback(
+                [&qt_app](const std::string& call_id, const std::string& caller) {
+                    qt_app.notify_incoming_call(call_id, caller);
+                });
             sip_client.start_transport();
             qt_app.show();
 
