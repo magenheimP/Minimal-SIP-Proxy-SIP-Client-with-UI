@@ -172,6 +172,7 @@ void SIPInviteHandler::handle_incoming_bye(const std::string& raw)
     client_.state().on_call_terminated();
     client_.logger().log("CALL", call_id, "CALL_TERMINATED", "remote BYE");
     std::cout << "\n[" << call_id << "] Remote party hung up.\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_answer()
@@ -219,6 +220,7 @@ void SIPInviteHandler::handle_100()
 
     client_.logger().log("CALL", call_id, "100_TRYING", "");
     std::cout << "[" << call_id << "] 100 Trying\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_180()
@@ -227,6 +229,7 @@ void SIPInviteHandler::handle_180()
     client_.state().on_ringing();
     client_.logger().log("CALL", call_id, "180_RINGING", "");
     std::cout << "[" << call_id << "] 180 Ringing...\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_200_ok_invite()
@@ -250,6 +253,7 @@ void SIPInviteHandler::handle_200_ok_invite()
         client_.factory().build_ack(from_user, from_domain,
                                      to_user,   to_domain, call_id);
     client_.send_to_server(ack);
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_200_ok_bye()
@@ -335,4 +339,5 @@ void SIPInviteHandler::handle_error(int code, const std::string& raw)
     std::cout << "[" << call_id << "] Call failed: " << reason << "\n> " << std::flush;
 
     state.on_call_terminated();
+    client_.notify_call_state_changed();
 }

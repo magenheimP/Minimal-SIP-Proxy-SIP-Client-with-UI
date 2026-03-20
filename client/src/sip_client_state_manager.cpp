@@ -101,6 +101,7 @@ void SIPClientStateManager::on_calling(const std::string& call_id,
     std::lock_guard<std::mutex> lock(mtx_);
     active_call_id_    = call_id;
     active_remote_uri_ = remote_uri;
+    is_incoming_call_  = false;
     transition_to_unlocked(State::Calling);
 }
 
@@ -110,6 +111,7 @@ void SIPClientStateManager::on_incoming_call(const std::string& call_id,
     std::lock_guard<std::mutex> lock(mtx_);
     active_call_id_    = call_id;
     active_remote_uri_ = remote_uri;
+    is_incoming_call_  = true;
     transition_to_unlocked(State::Ringing);
 }
 
@@ -125,5 +127,11 @@ void SIPClientStateManager::on_call_terminated() {
     std::lock_guard<std::mutex> lock(mtx_);
     active_call_id_.clear();
     active_remote_uri_.clear();
+    is_incoming_call_  = false;
     transition_to_unlocked(State::Registered);
+}
+
+bool SIPClientStateManager::is_incoming_call() const {
+    std::lock_guard<std::mutex> lock(mtx_);
+    return is_incoming_call_;
 }
