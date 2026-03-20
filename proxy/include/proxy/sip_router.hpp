@@ -38,11 +38,10 @@ namespace proxy {
     };
 
     struct CallContext {
-        std::string call_id;
         std::string caller;
         std::string callee;
         std::string caller_ip;
-        uint16_t caller_port;
+        uint16_t caller_port = 0;
         std::string callee_contact;
         std::string callee_ip;
         uint16_t callee_port = 0;
