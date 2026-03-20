@@ -21,7 +21,7 @@ public:
     bool        is_ringing()      const;
     bool        is_in_call()      const;
     bool        is_busy()         const;  // Calling || Ringing || InCall
-
+    bool is_incoming_call() const;
     static std::string state_name(State s);
 
     std::string registered_user()   const;
@@ -54,4 +54,5 @@ private:
     std::string         active_call_id_;
     std::string         active_remote_uri_;
     common::Logger&     logger_         { common::Logger::instance() };
+    bool is_incoming_call_ = false;
 };

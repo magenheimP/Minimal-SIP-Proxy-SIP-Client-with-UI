@@ -145,14 +145,15 @@ void CallWindow::update_button_states()
     using State = SIPClientStateManager::State;
 
     const bool idle     = (s == State::Registered);
-    const bool busy     = (s == State::Calling || s == State::Ringing || s == State::InCall);
-    const bool incoming = (s == State::Ringing) && !client_.state().active_call_id().empty();
-    const bool outgoing = (s == State::Calling);
+    const bool in_call  = (s == State::InCall);
+    const bool incoming = (s == State::Ringing)
+                       && !client_.state().active_call_id().empty()
+                       && client_.state().is_incoming_call();
 
     call_btn_->setEnabled(idle);
-    hangup_btn_->setEnabled(busy);
-    answer_btn_->setEnabled(incoming && !outgoing);
-    reject_btn_->setEnabled(incoming && !outgoing);
+    hangup_btn_->setEnabled(in_call);
+    answer_btn_->setEnabled(incoming);
+    reject_btn_->setEnabled(incoming);
 }
 
 void CallWindow::resizeEvent(QResizeEvent* event)
