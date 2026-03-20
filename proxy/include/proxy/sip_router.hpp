@@ -44,6 +44,8 @@ namespace proxy {
         std::string caller_ip;
         uint16_t caller_port;
         std::string callee_contact;
+        std::string callee_ip;
+        uint16_t callee_port = 0;
     };
 
     class SIPRouter {
