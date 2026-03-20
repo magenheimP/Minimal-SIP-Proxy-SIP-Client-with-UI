@@ -1,10 +1,15 @@
-//
-// Created by tamara on 3/5/26.
-//
-
 #include <iostream>
 
-int main() {
-    std::cout << "[sip_proxy] starting...\n";
-    return 0;
+#include "proxy/sip_proxy.hpp"
+
+int main()
+{
+    proxy::SIPProxy proxy;
+
+    proxy.start(5060);
+
+    std::cout << "Press ENTER to stop\n";
+    std::cin.get();
+
+    proxy.stop();
 }

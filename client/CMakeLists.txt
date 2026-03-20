@@ -1,12 +1,20 @@
-add_library(client INTERFACE)
+add_library(client
+        src/sip_client.cpp
+        src/sip_message_factory.cpp
+        src/sip_receive_handler.cpp
+        src/sip_client_state_manager.cpp
+        src/sip_register_handler.cpp
+        src/sip_invite_handler.cpp
+        src/cli_handler.cpp
+)
 
 target_include_directories(client
-        INTERFACE
+        PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
 target_link_libraries(client
-        INTERFACE
+        PUBLIC
         common
         networking
         project_options
