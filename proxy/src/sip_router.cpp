@@ -368,7 +368,12 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
 
     if (status_code == 200 && cseq.find("BYE") != std::string::npos) {
         registry_.remove_call(call_id);
-        call_contexts_.erase(call_id);
+
+        // Acquire lock before erasing from the shared call_contexts_ map
+        {
+            std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+            call_contexts_.erase(call_id);
+        }
 
         common::Logger::instance().log(
             "SIPRouter",
@@ -507,6 +512,8 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
         context.callee_port = static_cast<uint16_t>(std::stoi(callee_contact.substr(pos_colon + 1)));
     }
 
+    // Acquire lock before writing to the shared call_contexts_ map
+    std::lock_guard<std::mutex> lock(call_contexts_mutex_);
     call_contexts_[call_id] = context;
 
     common::Logger::instance().log(
@@ -519,6 +526,8 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
 }
 
 std::optional<CallContext> SIPRouter::get_call_context(const std::string& call_id) const {
+    // Acquire lock before reading from the shared call_contexts_ map
+    std::lock_guard<std::mutex> lock(call_contexts_mutex_);
     auto it = call_contexts_.find(call_id);
     if (it == call_contexts_.end()) {
         return std::nullopt;

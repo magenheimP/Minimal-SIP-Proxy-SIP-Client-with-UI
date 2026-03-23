@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 #include "../../common/include/common/sip_message.hpp"
 #include "../include/proxy/register_handler.hpp"
@@ -89,6 +90,9 @@ namespace proxy {
         RegisterHandler handler_;
 
         CallRegistry registry_;
+
+        // Protects call_contexts_ against concurrent access from multiple worker threads
+        mutable std::mutex call_contexts_mutex_;
 
         std::unordered_map<std::string, CallContext> call_contexts_;
     };
