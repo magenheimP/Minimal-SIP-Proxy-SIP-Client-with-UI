@@ -11,14 +11,11 @@ SIPRouter::SIPRouter(RegistrationTable& table)
     : table_(table),
       handler_(table) {}
 
-RoutingResult SIPRouter::route(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port) {
+    RoutingResult SIPRouter::route(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port) {
     const std::string call_id = message.get_header("Call-ID");
 
     common::Logger::instance().log(
-        "SIPRouter",
-        call_id,
-        "RECEIVED",
-        "Routing SIP message: " + message.start_line);
+        common::LogLevel::INFO, "SIPRouter", call_id, "RECEIVED", message);
 
     if (message.is_response()) {
         return handle_response(message);
@@ -203,7 +200,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
                    sender_ip,
                    sender_port);
 
-    session->handle_event(CallEvent::INVITE);
+    session->on_request(message);
 
     common::Logger::instance().log(
         "SIPRouter",
@@ -257,7 +254,7 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        session->handle_event(CallEvent::ACK);
+        session->on_request(message);
     }
 
     common::Logger::instance().log(
@@ -318,7 +315,7 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        session->handle_event(CallEvent::BYE);
+        session->on_request(message);
     }
 
     common::Logger::instance().log(
@@ -366,13 +363,7 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        if (status_code == 100) {
-            session->handle_event(CallEvent::TRYING_100);
-        } else if (status_code == 180) {
-            session->handle_event(CallEvent::RINGING_180);
-        } else if (status_code == 200 && cseq.find("INVITE") != std::string::npos) {
-            session->handle_event(CallEvent::OK_200);
-        }
+        session->on_response(forwarded_message);
     }
 
     if (status_code == 200 && cseq.find("BYE") != std::string::npos) {
@@ -390,7 +381,7 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
 
     const std::string top_via = forwarded_message.get_header("Via");
     const bool response_from_caller = !context->caller_ip.empty() &&
-                                        top_via.find(context->caller_ip) != std::string::npos;
+                                      top_via.find(context->caller_ip) != std::string::npos;
 
     std::string dest_ip;
     uint16_t dest_port;
@@ -409,12 +400,12 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
     }
 
     common::Logger::instance().log(
-    "SIPRouter",
-    call_id,
-    "FORWARD_RESPONSE",
-    "Forwarding SIP response with status = " +
-    std::to_string(status_code) + " to " + dest_user +
-    " = " + dest_ip + ":" + std::to_string(dest_port));
+        "SIPRouter",
+        call_id,
+        "FORWARD_RESPONSE",
+        "Forwarding SIP response with status = " +
+        std::to_string(status_code) + " to " + dest_user +
+        " = " + dest_ip + ":" + std::to_string(dest_port));
 
     RoutingResult result;
     result.action = RoutingAction::ForwardResponse;
@@ -501,7 +492,6 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
     const std::string call_id = message.get_header("Call-ID");
 
     CallContext context;
-    context.call_id = call_id;
     context.caller = caller;
     context.callee = callee;
 
