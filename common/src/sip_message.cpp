@@ -1,25 +1,10 @@
 #include "../include/common/sip_message.hpp"
 #include <sstream>
-#include <algorithm>
-#include <cctype>
 
 namespace common {
-
-    // Helper for case-insensitive string comparison
-    static bool headers_equal(const std::string& a, const std::string& b) {
-        if (a.size() != b.size()) return false;
-        for (std::size_t i = 0; i < a.size(); ++i) {
-            if (std::tolower(static_cast<unsigned char>(a[i])) !=
-                std::tolower(static_cast<unsigned char>(b[i]))) {
-                return false;
-            }
-        }
-        return true;
-    }
-
     std::string SIPMessage::get_header(const std::string& name) const {
         for (const auto& h : headers) {
-            if (headers_equal(h.name, name)) {
+            if (h.name == name) {
                 return h.value;
             }
         }
@@ -33,7 +18,7 @@ namespace common {
 
     bool SIPMessage::has_header(const std::string &name) const {
         for (const auto& h : headers) {
-            if (headers_equal(h.name, name)) {
+            if (h.name == name) {
                 return true;
             }
         }
@@ -44,7 +29,7 @@ namespace common {
         std::vector<std::string> values;
 
         for (const auto& h : headers) {
-            if (headers_equal(h.name, name)) {
+            if (h.name == name) {
                 values.push_back(h.value);
             }
         }
@@ -59,7 +44,7 @@ namespace common {
 
     bool SIPMessage::remove_first_header(const std::string& name) {
         for (auto it = headers.begin(); it != headers.end(); ++it) {
-            if (headers_equal(it->name, name)) {
+            if (it->name == name) {
                 headers.erase(it);
                 return true;
             }
@@ -79,7 +64,7 @@ namespace common {
     void SIPMessage::set_header(const std::string& name,
                                 const std::string& value) {
         for (auto& h : headers) {
-            if (headers_equal(h.name, name)) {
+            if (h.name == name) {
                 h.value = value;
                 return;
             }
