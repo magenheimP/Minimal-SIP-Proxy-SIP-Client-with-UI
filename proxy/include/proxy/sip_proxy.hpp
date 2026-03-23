@@ -30,6 +30,9 @@ namespace proxy {
     private:
         void handle_packet(const common::RawPacket& pkt);
 
+        void log_custom_headers(const common::SIPMessage& message);
+
+
     private:
         std::atomic<bool> running_{false};
 

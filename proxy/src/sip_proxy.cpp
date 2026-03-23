@@ -9,8 +9,16 @@
 
 #include "common/logger.hpp"
 #include "proxy/sip_parser.hpp"
+#include <unordered_set>
+#include <algorithm>
+#include <cctype>
 
 namespace proxy {
+
+        static const std::unordered_set<std::string> STANDARD_SIP_HEADERS = {
+        "via", "from", "to", "call-id", "cseq",
+        "contact", "content-length", "content-type"
+    };
 
     SIPProxy::SIPProxy(size_t worker_threads)
         : thread_pool_(worker_threads),
@@ -76,6 +84,8 @@ namespace proxy {
             message.get_header("Call-ID"),
             "SIP_MESSAGE_IN",
             message);
+        log_custom_headers(message);
+
 
         // Route it
         RoutingResult result = router_.route(message, pkt.ip, pkt.port);
@@ -186,6 +196,36 @@ namespace proxy {
                 "IGNORE",
                 "Message ignored");
             break;
+        }
+    }
+
+    void SIPProxy::log_custom_headers(const common::SIPMessage& message)
+    {
+        const std::string call_id = message.get_header("Call-ID");
+
+        for (const auto& header : message.headers) {
+            // Normalize to lowercase for case-insensitive lookup
+            std::string lower_name = header.name;
+            std::transform(lower_name.begin(), lower_name.end(),
+                           lower_name.begin(), ::tolower);
+
+            if (!STANDARD_SIP_HEADERS.contains(lower_name)) {
+                // Header name not in the standard set, custom header injected by the client
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "CUSTOM_HEADER",
+                    header.name + ": " + header.value);
+            } else if (lower_name == "via" &&
+                       header.value.find("proxy.local") == std::string::npos) {
+                // Via header present but not added by this proxy, it was set
+                // or replaced by the client directly
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "HEADER_MODIFIED",
+                    header.name + ": " + header.value);
+                       }
         }
     }
 
