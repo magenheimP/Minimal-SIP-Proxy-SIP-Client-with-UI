@@ -28,8 +28,10 @@ public:
                             const QString& call_id,
                             const QString& remote_uri);
     void incoming_call_signal(const QString& call_id, const QString& caller);
+
 private slots:
     void on_registration_succeeded();
+
 private:
     RegistrationWindow window_;
     CallWindow         call_window_;

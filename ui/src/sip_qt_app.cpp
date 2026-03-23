@@ -30,6 +30,7 @@ void SipQtApp::show()
 void SipQtApp::on_registration_succeeded()
 {
     window_.hide();
+    call_window_.syncHeadersFrom(window_.headerInjection());
     call_window_.show();
 }
 

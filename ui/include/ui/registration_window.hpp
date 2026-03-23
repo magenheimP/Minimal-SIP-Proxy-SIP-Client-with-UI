@@ -3,6 +3,7 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
+#include "ui/header_injection_widget.hpp"
 
 class SIPClient;
 
@@ -11,8 +12,12 @@ class RegistrationWindow : public QWidget {
 
 public:
     explicit RegistrationWindow(SIPClient& client, QWidget* parent = nullptr);
+
+    const HeaderInjectionWidget* headerInjection() const { return header_injection_; }
+
     signals:
-    void registration_succeeded();
+        void registration_succeeded();
+
 public slots:
     void on_register_response(bool success, const QString& raw_message);
 
@@ -20,7 +25,8 @@ private slots:
     void on_register_clicked();
 
 private:
-    SIPClient&   client_;
+    SIPClient&             client_;
+    HeaderInjectionWidget* header_injection_;
 
     QLineEdit*   username_edit_;
     QLineEdit*   domain_edit_;

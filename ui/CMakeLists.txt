@@ -10,9 +10,11 @@ add_library(ui
         src/registration_window.cpp
         src/call_window.cpp
         src/sip_qt_app.cpp
+        src/header_injection_widget.cpp          # ← ADD
         include/ui/registration_window.hpp
         include/ui/call_window.hpp
         include/ui/sip_qt_app.hpp
+        include/ui/header_injection_widget.hpp   # ← ADD
 )
 
 set_target_properties(ui PROPERTIES

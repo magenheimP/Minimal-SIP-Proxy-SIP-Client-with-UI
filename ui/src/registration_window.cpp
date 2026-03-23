@@ -1,12 +1,12 @@
 #include "ui/registration_window.hpp"
 #include "client/sip_client.hpp"
 
-
 #include <QHBoxLayout>
 #include <QFormLayout>
 #include <QMessageBox>
 #include <QGuiApplication>
 #include <QScreen>
+
 RegistrationWindow::RegistrationWindow(SIPClient& client, QWidget* parent)
     : QWidget(parent)
     , client_(client)
@@ -15,15 +15,15 @@ RegistrationWindow::RegistrationWindow(SIPClient& client, QWidget* parent)
     setMinimumWidth(320);
     resize(500, 300);
 
-    username_edit_ = new QLineEdit(this);
-    domain_edit_   = new QLineEdit(this);
-    register_btn_  = new QPushButton("Register", this);
-    status_label_  = new QLabel("Not registered", this);
+    username_edit_    = new QLineEdit(this);
+    domain_edit_      = new QLineEdit(this);
+    register_btn_     = new QPushButton("Register", this);
+    status_label_     = new QLabel("Not registered", this);
+    header_injection_ = new HeaderInjectionWidget(this);
 
     auto* form = new QFormLayout();
     form->addRow("Username:", username_edit_);
     form->addRow("Domain:",   domain_edit_);
-
 
     register_btn_->setFixedWidth(100);
     auto* btnRow = new QHBoxLayout();
@@ -31,13 +31,13 @@ RegistrationWindow::RegistrationWindow(SIPClient& client, QWidget* parent)
     btnRow->addWidget(register_btn_);
     btnRow->addStretch();
 
-
     auto* centerCol = new QVBoxLayout();
     centerCol->addLayout(form);
+    centerCol->addSpacing(8);
+    centerCol->addWidget(header_injection_);
     centerCol->addSpacing(12);
     centerCol->addLayout(btnRow);
     centerCol->addStretch();
-
 
     auto* topRow = new QHBoxLayout();
     topRow->addWidget(status_label_);
@@ -53,6 +53,8 @@ RegistrationWindow::RegistrationWindow(SIPClient& client, QWidget* parent)
     connect(register_btn_, &QPushButton::clicked,
             this,           &RegistrationWindow::on_register_clicked);
 }
+
+
 
 void RegistrationWindow::on_register_clicked()
 {

@@ -10,20 +10,20 @@
 CallWindow::CallWindow(SIPClient& client, QWidget* parent)
     : QWidget(parent)
     , client_(client)
+    , header_injection_(new HeaderInjectionWidget(this))
 {
     setWindowTitle("SIP Call");
     setMinimumWidth(320);
     resize(500, 320);
 
-    callee_edit_  = new QLineEdit(this);
+    callee_edit_   = new QLineEdit(this);
     callee_edit_->setPlaceholderText("user@domain");
-
-    call_btn_    = new QPushButton("Call",   this);
-    hangup_btn_  = new QPushButton("Hang Up", this);
-    answer_btn_  = new QPushButton("Answer", this);
-    reject_btn_  = new QPushButton("Reject", this);
+    call_btn_      = new QPushButton("Call",    this);
+    hangup_btn_    = new QPushButton("Hang Up", this);
+    answer_btn_    = new QPushButton("Answer",  this);
+    reject_btn_    = new QPushButton("Reject",  this);
     status_label_  = new QLabel("Idle", this);
-    call_id_label_ = new QLabel("", this);
+    call_id_label_ = new QLabel("",     this);
 
     call_btn_->setFixedWidth(100);
     hangup_btn_->setFixedWidth(100);
@@ -43,6 +43,8 @@ CallWindow::CallWindow(SIPClient& client, QWidget* parent)
 
     auto* centerCol = new QVBoxLayout();
     centerCol->addLayout(form);
+    centerCol->addSpacing(8);
+    centerCol->addWidget(header_injection_);
     centerCol->addSpacing(12);
     centerCol->addLayout(btnRow);
     centerCol->addStretch();
@@ -65,6 +67,11 @@ CallWindow::CallWindow(SIPClient& client, QWidget* parent)
     connect(reject_btn_, &QPushButton::clicked, this, &CallWindow::on_reject_clicked);
 
     update_button_states();
+}
+
+void CallWindow::syncHeadersFrom(const HeaderInjectionWidget* source)
+{
+    source->syncTo(header_injection_);
 }
 
 void CallWindow::on_call_clicked()
@@ -107,8 +114,6 @@ void CallWindow::on_reject_clicked()
     client_.do_reject();
 }
 
-
-
 void CallWindow::on_call_state_changed(const QString& state,
                                         const QString& call_id,
                                         const QString& remote_uri)
@@ -116,11 +121,9 @@ void CallWindow::on_call_state_changed(const QString& state,
     status_label_->setText(state);
     call_id_label_->setText(call_id.isEmpty() ? "" : "[" + call_id + "]");
 
-
     if (state == "Idle" || state == "Registered") {
         call_id_label_->clear();
     } else if (!remote_uri.isEmpty()) {
-
         QString display = remote_uri;
         if (display.startsWith("sip:", Qt::CaseInsensitive))
             display = display.mid(4);
@@ -136,8 +139,6 @@ void CallWindow::on_incoming_call(const QString& call_id, const QString& caller)
     call_id_label_->setText("[" + call_id + "]");
     update_button_states();
 }
-
-
 
 void CallWindow::update_button_states()
 {
@@ -165,6 +166,7 @@ void CallWindow::resizeEvent(QResizeEvent* event)
     int vMargin  = (int)(height() * 0.13);
     layout()->setContentsMargins(hMargin, vMargin, hMargin, vMargin);
 }
+
 void CallWindow::showEvent(QShowEvent* event)
 {
     QWidget::showEvent(event);

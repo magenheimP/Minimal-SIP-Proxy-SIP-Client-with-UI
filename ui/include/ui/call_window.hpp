@@ -3,10 +3,8 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QLabel>
-#include <QVBoxLayout>
-#include <QHBoxLayout>
-#include <QFormLayout>
 #include <QResizeEvent>
+#include "ui/header_injection_widget.hpp"
 
 class SIPClient;
 
@@ -15,6 +13,9 @@ class CallWindow : public QWidget {
 
 public:
     explicit CallWindow(SIPClient& client, QWidget* parent = nullptr);
+
+
+    void syncHeadersFrom(const HeaderInjectionWidget* source);
 
 public slots:
     void on_call_state_changed(const QString& state,
@@ -25,6 +26,7 @@ public slots:
 protected:
     void resizeEvent(QResizeEvent* event) override;
     void showEvent(QShowEvent* event) override;
+
 private slots:
     void on_call_clicked();
     void on_hangup_clicked();
@@ -34,9 +36,10 @@ private slots:
 private:
     void update_button_states();
 
-    SIPClient& client_;
+    SIPClient&             client_;
+    HeaderInjectionWidget* header_injection_;
 
-    QLineEdit*  callee_edit_;
+    QLineEdit*   callee_edit_;
     QPushButton* call_btn_;
     QPushButton* hangup_btn_;
     QPushButton* answer_btn_;
