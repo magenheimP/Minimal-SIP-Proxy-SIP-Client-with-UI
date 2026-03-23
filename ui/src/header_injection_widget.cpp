@@ -36,7 +36,7 @@ void HeaderInjectionWidget::buildTabs()
         auto* editor = new QTextEdit();
         editor->setPlaceholderText(
             QString("Extra headers for %1 requests,\n"
-                    "one per line, e.g.:\n"
+                    "one per line\n"
                     "X-Custom-Header: value").arg(method));
         editor->setAcceptRichText(false);
         editor->setFixedHeight(110);
