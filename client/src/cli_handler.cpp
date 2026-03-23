@@ -3,10 +3,20 @@
 #include <sstream>
 #include <iostream>
 #include <limits>
-
+#include <thread>
+#include <chrono>
 CLIHandler::CLIHandler(SIPClient& client)
     : client_(client)
 {}
+void CLIHandler::handle_sleep_command(std::istringstream& iss)
+{
+    int seconds;
+    if (!(iss >> seconds)) {
+        std::cout << "Usage: sleep <seconds>\n";
+        return;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+}
 
 void CLIHandler::run()
 {
@@ -49,8 +59,11 @@ void CLIHandler::run()
             client_.do_answer();
         } else if (cmd == "reject") {
             client_.do_reject();
+        } else if (cmd == "sleep") {
+            handle_sleep_command(iss);
         }else if (cmd == "help") {
             std::cout << "Commands: register, call, hangup, status, exit\n";
+            std::cout << "Commands: register, call, hangup, status, sleep, exit\n";
         } else {
             log.log("CLI", "-", "UNKNOWN_COMMAND", cmd);
             std::cout << "Unknown command: " << cmd
