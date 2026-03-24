@@ -135,7 +135,6 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
         return result;
     }
-
     if (caller == callee) {
         common::Logger::instance().log(
             "SIPRouter",
@@ -149,7 +148,6 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
         result.user = caller;
         return result;
     }
-
     common::Logger::instance().log(
         "SIPRouter",
         call_id,
@@ -366,6 +364,16 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
         session->on_response(forwarded_message);
     }
 
+    if (status_code == 200 && cseq.find("INVITE") != std::string::npos) {
+        std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+        auto it = call_contexts_.find(call_id);
+        if (it != call_contexts_.end()) {
+            for (const auto& header : forwarded_message.headers) {
+                it->second.callee_stored_headers[header.name] = header.value;
+            }
+        }
+    }
+
     if (status_code == 200 && cseq.find("BYE") != std::string::npos) {
         registry_.remove_call(call_id);
 
@@ -512,7 +520,12 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
     }
 
     for (const auto& header : message.headers) {
-        context.stored_headers[header.name] = header.value;
+        context.caller_stored_headers[header.name] = header.value;
+    }
+
+    const auto callee_registered_contact = table_.get_contact(callee);
+    if (callee_registered_contact) {
+        context.callee_stored_headers["Contact"] = *callee_registered_contact;
     }
 
     // Acquire lock before writing to the shared call_contexts_ map

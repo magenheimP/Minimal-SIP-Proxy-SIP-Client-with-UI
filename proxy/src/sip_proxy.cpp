@@ -2,22 +2,17 @@
 // Created by lazarstani on 3/17/26.
 //
 
-
-
-
 #include "proxy/sip_proxy.hpp"
-
 #include "common/logger.hpp"
 #include "proxy/sip_parser.hpp"
+
 #include <unordered_set>
-#include <algorithm>
-#include <cctype>
 
 namespace proxy {
 
-        static const std::unordered_set<std::string> STANDARD_SIP_HEADERS = {
-        "via", "from", "to", "call-id", "cseq",
-        "contact", "content-length", "content-type"
+    static const std::unordered_set<std::string> STANDARD_SIP_HEADERS = {
+        "Via", "From", "To", "Call-ID", "CSeq",
+        "Contact", "Content-Length", "Content-Type"
     };
 
     SIPProxy::SIPProxy(size_t worker_threads)
@@ -67,6 +62,55 @@ namespace proxy {
         thread_pool_.shutdown();
     }
 
+    void SIPProxy::log_custom_headers(const common::SIPMessage& message)
+    {
+        const std::string call_id = message.get_header("Call-ID");
+
+        for (const auto& header : message.headers) {
+            if (STANDARD_SIP_HEADERS.find(header.name) == STANDARD_SIP_HEADERS.end()) {
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "CUSTOM_HEADER",
+                    header.name + ": " + header.value);
+            }
+        }
+    }
+
+    void SIPProxy::log_modified_headers(const common::SIPMessage& message,
+                                        const CallContext& context)
+    {
+        const std::string call_id = message.get_header("Call-ID");
+        const std::string sender  = message.get_header("From");
+
+        const bool is_caller = sender.find(context.caller) != std::string::npos;
+        const auto& stored   = is_caller
+                               ? context.caller_stored_headers
+                               : context.callee_stored_headers;
+
+        if (!is_caller && stored.empty()) return;
+
+        for (const auto& header : message.headers) {
+            // Only check standard headers — custom headers are not tracked.
+            if (STANDARD_SIP_HEADERS.find(header.name) == STANDARD_SIP_HEADERS.end()) {
+                continue;
+            }
+
+            if (header.name == "Via") continue;
+            if (header.name == "CSeq") continue;
+
+            const auto it = stored.find(header.name);
+            if (it != stored.end() && it->second != header.value) {
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "HEADER_MODIFIED",
+                    header.name + ": " + header.value +
+                    " (was: " + it->second + ")");
+            }
+        }
+    }
+
     void SIPProxy::handle_packet(const common::RawPacket& pkt)
     {
         common::Logger::instance().log(
@@ -84,8 +128,14 @@ namespace proxy {
             message.get_header("Call-ID"),
             "SIP_MESSAGE_IN",
             message);
+
         log_custom_headers(message);
 
+        const std::string call_id = message.get_header("Call-ID");
+        const auto context = router_.get_call_context(call_id);
+        if (context) {
+            log_modified_headers(message, *context);
+        }
 
         // Route it
         RoutingResult result = router_.route(message, pkt.ip, pkt.port);
@@ -196,36 +246,6 @@ namespace proxy {
                 "IGNORE",
                 "Message ignored");
             break;
-        }
-    }
-
-    void SIPProxy::log_custom_headers(const common::SIPMessage& message)
-    {
-        const std::string call_id = message.get_header("Call-ID");
-
-        for (const auto& header : message.headers) {
-            // Normalize to lowercase for case-insensitive lookup
-            std::string lower_name = header.name;
-            std::transform(lower_name.begin(), lower_name.end(),
-                           lower_name.begin(), ::tolower);
-
-            if (!STANDARD_SIP_HEADERS.contains(lower_name)) {
-                // Header name not in the standard set, custom header injected by the client
-                common::Logger::instance().log(
-                    "NETWORK",
-                    call_id,
-                    "CUSTOM_HEADER",
-                    header.name + ": " + header.value);
-            } else if (lower_name == "via" &&
-                       header.value.find("proxy.local") == std::string::npos) {
-                // Via header present but not added by this proxy, it was set
-                // or replaced by the client directly
-                common::Logger::instance().log(
-                    "NETWORK",
-                    call_id,
-                    "HEADER_MODIFIED",
-                    header.name + ": " + header.value);
-                       }
         }
     }
 

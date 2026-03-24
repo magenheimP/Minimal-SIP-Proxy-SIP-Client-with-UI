@@ -46,7 +46,8 @@ namespace proxy {
         std::string callee_contact;
         std::string callee_ip;
         uint16_t callee_port = 0;
-        std::unordered_map<std::string, std::string> stored_headers;
+        std::unordered_map<std::string, std::string> caller_stored_headers;
+        std::unordered_map<std::string, std::string> callee_stored_headers;
     };
 
     class SIPRouter {
@@ -92,7 +93,6 @@ namespace proxy {
 
         CallRegistry registry_;
 
-        // Protects call_contexts_ against concurrent access from multiple worker threads
         mutable std::mutex call_contexts_mutex_;
 
         std::unordered_map<std::string, CallContext> call_contexts_;
