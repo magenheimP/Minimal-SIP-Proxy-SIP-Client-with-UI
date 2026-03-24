@@ -7,6 +7,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <mutex>
 
 #include "../../common/include/common/sip_message.hpp"
 #include "../include/proxy/register_handler.hpp"
@@ -45,6 +46,7 @@ namespace proxy {
         std::string callee_contact;
         std::string callee_ip;
         uint16_t callee_port = 0;
+        std::unordered_map<std::string, std::string> stored_headers;
     };
 
     class SIPRouter {
@@ -54,6 +56,8 @@ namespace proxy {
         RoutingResult route(const common::SIPMessage& message,
                             const std::string& sender_ip,
                             uint16_t sender_port);
+
+        std::optional<CallContext> get_call_context(const std::string& call_id) const;
 
     private:
         RoutingResult handle_register(const common::SIPMessage& message);
@@ -80,8 +84,6 @@ namespace proxy {
                                 const std::string& caller_ip,
                                 uint16_t caller_port);
 
-        std::optional<CallContext> get_call_context(const std::string& call_id) const;
-
         static void strip_proxy_via(common::SIPMessage& message);
 
     private:
@@ -89,6 +91,9 @@ namespace proxy {
         RegisterHandler handler_;
 
         CallRegistry registry_;
+
+        // Protects call_contexts_ against concurrent access from multiple worker threads
+        mutable std::mutex call_contexts_mutex_;
 
         std::unordered_map<std::string, CallContext> call_contexts_;
     };
