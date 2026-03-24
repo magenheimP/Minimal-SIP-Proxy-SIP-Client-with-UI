@@ -60,6 +60,10 @@ namespace proxy {
 
         std::optional<CallContext> get_call_context(const std::string& call_id) const;
 
+        std::optional<std::string> get_registered_contact(const std::string& user) const {
+            return table_.get_contact(user);
+        }
+
     private:
         RoutingResult handle_register(const common::SIPMessage& message);
         RoutingResult handle_invite(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port);

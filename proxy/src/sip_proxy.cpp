@@ -91,7 +91,6 @@ namespace proxy {
         if (!is_caller && stored.empty()) return;
 
         for (const auto& header : message.headers) {
-            // Only check standard headers — custom headers are not tracked.
             if (STANDARD_SIP_HEADERS.find(header.name) == STANDARD_SIP_HEADERS.end()) {
                 continue;
             }
@@ -135,6 +134,28 @@ namespace proxy {
         const auto context = router_.get_call_context(call_id);
         if (context) {
             log_modified_headers(message, *context);
+        }
+
+        if (message.is_request() && message.get_method() == "INVITE") {
+            const std::string caller = message.get_header("From");
+            const std::string contact_in_invite = message.get_header("Contact");
+
+            const auto sip_pos = caller.find("sip:");
+            const auto gt_pos  = caller.find('>', sip_pos);
+            if (sip_pos != std::string::npos && !contact_in_invite.empty()) {
+                const std::string caller_identity = caller.substr(sip_pos + 4,
+                    gt_pos != std::string::npos ? gt_pos - sip_pos - 4 : std::string::npos);
+
+                const auto registered_contact = router_.get_registered_contact(caller_identity);
+                if (registered_contact && *registered_contact != contact_in_invite) {
+                    common::Logger::instance().log(
+                        "NETWORK",
+                        call_id,
+                        "HEADER_MODIFIED",
+                        "Contact: " + contact_in_invite +
+                        " (was: " + *registered_contact + ")");
+                }
+            }
         }
 
         // Route it
