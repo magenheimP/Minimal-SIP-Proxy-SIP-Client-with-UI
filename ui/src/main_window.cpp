@@ -114,6 +114,9 @@ MainWindow::MainWindow(SIPClient& client, QWidget* parent)
     connect(hangup_btn_,   &QPushButton::clicked, this, &MainWindow::on_hangup_clicked);
     connect(answer_btn_,   &QPushButton::clicked, this, &MainWindow::on_answer_clicked);
     connect(reject_btn_,   &QPushButton::clicked, this, &MainWindow::on_reject_clicked);
+    // connect in constructor
+    connect(header_injection_, &HeaderInjectionWidget::stateChanged,
+            this, &MainWindow::on_headers_changed);
 
     update_button_states();
     set_call_section_locked(true);
@@ -183,7 +186,13 @@ void MainWindow::on_register_response(bool success, const QString& raw_message)
         QMessageBox::information(this, "SIP Response", raw_message);
     }
 }
-
+void MainWindow::on_headers_changed()
+{
+    if (!header_injection_->isEnabled()) return;
+    client_.set_pending_headers("100", header_injection_->headersFor("100").toStdString());
+    client_.set_pending_headers("180", header_injection_->headersFor("180").toStdString());
+    client_.set_pending_headers("200", header_injection_->headersFor("200").toStdString());
+}
 void MainWindow::on_call_clicked()
 {
     const QString callee = callee_edit_->text().trimmed();

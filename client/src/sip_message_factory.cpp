@@ -185,7 +185,8 @@ std::string SIPMessageFactory::build_ack_for_error(const std::string& from_user,
 
 std::string SIPMessageFactory::build_response(int code,
                                                const std::string& reason,
-                                               const std::string& request_raw)
+                                               const std::string& request_raw ,
+                                               const std::string& extra_headers)
 {
     auto get_header = [&](const std::string& name) -> std::string {
         std::regex re(name + R"(\s*:\s*(.+))", std::regex::icase);
@@ -197,11 +198,21 @@ std::string SIPMessageFactory::build_response(int code,
 
     std::ostringstream oss;
     oss << "SIP/2.0 " << code << " " << reason << "\r\n";
-    oss << "Via: "         << get_header("Via")     << "\r\n";
-    oss << "From: "        << get_header("From")    << "\r\n";
-    oss << "To: "          << get_header("To")      << "\r\n";
-    oss << "Call-ID: "     << get_header("Call-ID") << "\r\n";
-    oss << "CSeq: "        << get_header("CSeq")    << "\r\n";
+    oss << "Via: "     << get_header("Via")     << "\r\n";
+    oss << "From: "    << get_header("From")    << "\r\n";
+    oss << "To: "      << get_header("To")      << "\r\n";
+    oss << "Call-ID: " << get_header("Call-ID") << "\r\n";
+    oss << "CSeq: "    << get_header("CSeq")    << "\r\n";
+
+    if (!extra_headers.empty()) {
+        std::istringstream ss(extra_headers);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (!line.empty()) oss << line << "\r\n";
+        }
+    }
+
     oss << "Content-Length: 0\r\n\r\n";
     return oss.str();
 }
