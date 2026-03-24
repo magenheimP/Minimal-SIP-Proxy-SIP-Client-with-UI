@@ -44,9 +44,46 @@ std::pair<bool, std::string> SIPClient::register_response_snapshot() const
              receiver_.get_register_response() };
 }
 
-std::string SIPClient::build_register_message(const std::string& username, const std::string& domain)
+void SIPClient::set_pending_headers(const std::string& method,
+                                     const std::string& headers)
 {
-    return factory_.build_register(username, domain);
+    pending_headers_[method] = headers;
+}
+
+std::string SIPClient::pending_headers(const std::string& method) const
+{
+    auto it = pending_headers_.find(method);
+    return it != pending_headers_.end() ? it->second : std::string{};
+}
+
+std::string SIPClient::build_register_message(const std::string& username,
+                                               const std::string& domain,
+                                               const std::string& extra_headers)
+{
+    return factory_.build_register(username, domain, extra_headers);
+}
+
+void SIPClient::do_register(const std::string& username,
+                             const std::string& domain,
+                             const std::string& extra_headers)
+{
+    set_pending_headers("REGISTER", extra_headers);
+    register_handler_.handle_register(username, domain);
+}
+
+void SIPClient::do_invite(const std::string& from_user,
+                           const std::string& from_domain,
+                           const std::string& to_user,
+                           const std::string& to_domain)
+{
+
+    invite_handler_.handle_invite(from_user, from_domain, to_user, to_domain);
+}
+
+void SIPClient::do_bye(const std::string& extra_headers)
+{
+    set_pending_headers("BYE", extra_headers);
+    invite_handler_.handle_bye();
 }
 
 SIPClientStateManager& SIPClient::state()
@@ -59,11 +96,6 @@ common::Logger& SIPClient::logger()
     return logger_;
 }
 
-void SIPClient::do_register(const std::string& username,
-                             const std::string& domain)
-{
-    register_handler_.handle_register(username, domain);
-}
 
 void SIPClient::on_packet_received(const std::string& data,
                                     const std::string& sender_ip,
@@ -138,19 +170,6 @@ void SIPClient::set_incoming_call_callback(
 const std::string& SIPClient::local_ip() const { return server_ip_; }
 SIPMessageFactory& SIPClient::factory()         { return factory_; }
 
-void SIPClient::do_invite(const std::string& from_user,
-                           const std::string& from_domain,
-                           const std::string& to_user,
-                           const std::string& to_domain)
-{
-    invite_handler_.handle_invite(from_user, from_domain, to_user, to_domain);
-}
-
-void SIPClient::do_bye()
-{
-    invite_handler_.handle_bye();
-
-}
 void SIPClient::do_answer() {
     invite_handler_.handle_answer();
 }

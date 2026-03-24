@@ -31,9 +31,11 @@ void SIPInviteHandler::handle_invite(const std::string& from_user,
 
     state.on_calling(call_id, remote_uri);
 
+    const std::string extra = client_.pending_headers("INVITE");
     const std::string msg =
         client_.factory().build_invite(from_user, from_domain,
-                                        to_user,   to_domain, call_id);
+                                        to_user,   to_domain,
+                                        call_id,   extra);
 
     client_.logger().log("CALL", call_id, "INVITE_SENT", remote_uri);
     client_.send_to_server(msg);
@@ -62,9 +64,11 @@ void SIPInviteHandler::handle_bye()
 
     auto [to_user, to_domain] = split_sip_uri(remote_uri);
 
+    const std::string extra = client_.pending_headers("BYE");
     const std::string msg =
         client_.factory().build_bye(from_user, from_domain,
-                                     to_user,   to_domain, call_id);
+                                     to_user,   to_domain,
+                                     call_id,   extra);
 
     client_.logger().log("CALL", call_id, "BYE_SENT", remote_uri);
     client_.send_to_server(msg);
@@ -249,9 +253,11 @@ void SIPInviteHandler::handle_200_ok_invite()
     const std::string from_domain = local.substr(at + 1);
     auto [to_user, to_domain] = split_sip_uri(remote_uri);
 
+    const std::string extra = client_.pending_headers("ACK");
     const std::string ack =
         client_.factory().build_ack(from_user, from_domain,
-                                     to_user,   to_domain, call_id);
+                                     to_user,   to_domain,
+                                     call_id,   extra);
     client_.send_to_server(ack);
     client_.notify_call_state_changed();
 }

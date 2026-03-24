@@ -18,7 +18,8 @@ void SIPRegisterHandler::handle_register(const std::string& username,
     client_.state().on_registering();
     client_.reset_receive_state();
 
-    const std::string message = client_.build_register_message(username, domain);
+    const std::string extra   = client_.pending_headers("REGISTER");
+    const std::string message = client_.build_register_message(username, domain, extra);
 
     constexpr int max_attempts = 5;
     constexpr int timeout_sec  = 2;

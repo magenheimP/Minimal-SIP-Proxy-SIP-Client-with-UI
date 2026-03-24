@@ -27,11 +27,14 @@ public:
     using ResponseCallback = std::function<void(bool, const std::string&)>;
     void set_register_response_callback(ResponseCallback cb);
     void start_transport();
-    
+
     std::pair<bool, std::string> register_response_snapshot() const;
     std::string build_register_message(const std::string& username,
-                                       const std::string& domain);
-    void do_register(const std::string& username, const std::string& domain);
+                                    const std::string& domain,
+                                    const std::string& extra_headers = {});
+    void do_register(const std::string& username,
+                 const std::string& domain,
+                 const std::string& extra_headers = {});
     void do_reject();
     void do_answer();
     using StateCallback = std::function<void(const std::string& state,
@@ -41,12 +44,16 @@ public:
     void set_incoming_call_callback(std::function<void(const std::string& call_id,
                                                         const std::string& caller)> cb);
     void do_invite(const std::string& from_user,
-                   const std::string& from_domain,
-                   const std::string& to_user,
-                   const std::string& to_domain);
-    void do_bye();
+               const std::string& from_domain,
+               const std::string& to_user,
+               const std::string& to_domain);
+
+    void do_bye(const std::string& extra_headers = {});
     void notify_call_state_changed();
 
+    void set_pending_headers(const std::string& method,
+                          const std::string& headers);
+    std::string pending_headers(const std::string& method) const;
     SIPClientStateManager& state();
     common::Logger&        logger();
     SIPMessageFactory&     factory();
@@ -56,6 +63,7 @@ private:
     ResponseCallback register_response_cb_;
     StateCallback call_state_cb_;
     std::function<void(const std::string&, const std::string&)> incoming_call_cb_;
+    std::unordered_map<std::string, std::string> pending_headers_;
     void on_packet_received(const std::string& data,
                             const std::string& sender_ip,
                             uint16_t           sender_port);

@@ -7,12 +7,12 @@ else()
 endif()
 
 add_library(ui
-        src/registration_window.cpp
-        src/call_window.cpp
+        src/main_window.cpp
         src/sip_qt_app.cpp
-        include/ui/registration_window.hpp
-        include/ui/call_window.hpp
+        src/header_injection_widget.cpp
+        include/ui/main_window.hpp
         include/ui/sip_qt_app.hpp
+        include/ui/header_injection_widget.hpp
 )
 
 set_target_properties(ui PROPERTIES
