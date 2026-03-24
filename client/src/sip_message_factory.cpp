@@ -5,19 +5,23 @@
 #include <regex>
 #include <unordered_map>
 #include <stdexcept>
+#include <chrono>
+#include <random>
 
 SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port)
     : local_ip_(local_ip)
     , local_port_(local_port)
     , cseq_(1)
+    , rng_(std::chrono::steady_clock::now().time_since_epoch().count())
 {
-    std::srand(static_cast<unsigned>(std::time(nullptr)));
-    register_call_id_ = std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+    std::uniform_int_distribution<uint64_t> dist;
+    register_call_id_ = std::to_string(dist(rng_)) + "@" + local_ip_;
 }
 
 std::string SIPMessageFactory::new_call_id() const
 {
-    return std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+    std::uniform_int_distribution<uint64_t> dist;
+    return std::to_string(dist(rng_)) + "@" + local_ip_;
 }
 
 void SIPMessageFactory::set_local_port(uint16_t port)

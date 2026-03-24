@@ -1,6 +1,6 @@
 #pragma once
 #include <string>
-
+#include <sstream>
 class SIPClient;
 
 class CLIHandler {
@@ -13,6 +13,7 @@ private:
 
     void handle_register_command();
     void handle_call_command();
+    void handle_sleep_command(std::istringstream& iss);
 
     SIPClient& client_;
 };

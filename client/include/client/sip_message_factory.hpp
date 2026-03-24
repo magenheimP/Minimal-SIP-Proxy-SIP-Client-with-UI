@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <string>
 #include "common/sip_message.hpp"
+#include <random>
 
 class SIPMessageFactory {
 public:
@@ -58,4 +59,5 @@ private:
     int         local_port_;
     int         cseq_;
     std::string register_call_id_;
+    mutable std::mt19937_64 rng_;
 };
