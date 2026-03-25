@@ -1,7 +1,7 @@
 #include "ui/header_injection_widget.hpp"
 
 const QStringList HeaderInjectionWidget::kMethods = {
-    "REGISTER", "INVITE", "ACK", "BYE"
+    "REGISTER", "INVITE", "ACK", "BYE", "100", "180", "200"
 };
 
 HeaderInjectionWidget::HeaderInjectionWidget(QWidget* parent)

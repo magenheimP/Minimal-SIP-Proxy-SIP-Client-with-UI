@@ -49,7 +49,8 @@ public:
                            const std::string& extra_headers = {});
     std::string build_response(int code,
                                                const std::string& reason,
-                                               const std::string& request_raw);
+                                               const std::string& request_raw,
+                                               const std::string& extra_headers={});
 
 private:
     std::string serialize(const common::SIPMessage& msg) const;

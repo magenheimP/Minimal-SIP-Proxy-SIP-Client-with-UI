@@ -148,11 +148,15 @@ void SIPInviteHandler::handle_incoming_invite(const std::string& raw)
     client_.state().on_incoming_call(call_id, remote_uri);
     client_.notify_call_state_changed();
 
-    const std::string trying = client_.factory().build_response(100, "Trying", raw);
+    const std::string trying = client_.factory().build_response(
+    100, "Trying", raw,
+    client_.pending_headers("100"));
     client_.send_to_server(trying);
     client_.logger().log("CALL", call_id, "100_TRYING_SENT", caller);
 
-    const std::string ringing = client_.factory().build_response(180, "Ringing", raw);
+    const std::string ringing = client_.factory().build_response(
+        180, "Ringing", raw,
+        client_.pending_headers("180"));
     client_.send_to_server(ringing);
     client_.logger().log("CALL", call_id, "180_RINGING_SENT", caller);
 
@@ -170,7 +174,9 @@ void SIPInviteHandler::handle_incoming_bye(const std::string& raw)
     if (call_id.empty()) return;
     if (call_id != client_.state().active_call_id()) return;
 
-    const std::string ok = client_.factory().build_response(200, "OK", raw);
+    const std::string ok = client_.factory().build_response(
+    200, "OK", raw,
+    client_.pending_headers("200"));
     client_.send_to_server(ok);
 
     client_.state().on_call_terminated();
@@ -187,7 +193,9 @@ void SIPInviteHandler::handle_answer()
     }
 
     const std::string call_id = extract_call_id(pending_invite_);
-    const std::string ok = client_.factory().build_response(200, "OK", pending_invite_);
+    const std::string ok = client_.factory().build_response(
+       200, "OK", pending_invite_,
+       client_.pending_headers("200"));
     client_.send_to_server(ok);
 
     client_.state().on_call_established();

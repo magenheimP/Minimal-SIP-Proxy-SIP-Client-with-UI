@@ -34,6 +34,7 @@ private slots:
     void on_hangup_clicked();
     void on_answer_clicked();
     void on_reject_clicked();
+    void on_headers_changed();
 
 private:
     void update_button_states();
