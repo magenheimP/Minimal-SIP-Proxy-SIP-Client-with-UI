@@ -4,6 +4,7 @@
 
 #include "../include/proxy/sip_router.hpp"
 #include "../../common/include/common/logger.hpp"
+#include <unordered_set>
 
 namespace proxy {
 
@@ -211,6 +212,8 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     result.message = forwarded_message;
     result.contact = *callee_contact;
     result.user = callee;
+    result.trying_response = make_trying_response(message);
+    result.has_trying_response = true;
 
     return result;
 }
@@ -419,6 +422,22 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
         std::to_string(status_code) + " to " + dest_user +
         " = " + dest_ip + ":" + std::to_string(dest_port));
 
+    static const std::unordered_set<std::string> STANDARD_HEADERS = {
+        "Via", "From", "To", "Call-ID", "CSeq",
+        "Contact", "Content-Length", "Content-Type"
+    };
+
+    const auto& stored = response_from_caller
+                         ? context->callee_stored_headers
+                         : context->caller_stored_headers;
+
+    for (const auto& [name, value] : stored) {
+        if (STANDARD_HEADERS.count(name) == 0 &&
+            !forwarded_message.has_header(name)) {
+            forwarded_message.add_header(name, value);
+        }
+    }
+
     RoutingResult result;
     result.action = RoutingAction::ForwardResponse;
     result.message = forwarded_message;
@@ -561,6 +580,28 @@ void SIPRouter::strip_proxy_via(common::SIPMessage& message) {
             return;
         }
     }
+}
+
+common::SIPMessage SIPRouter::make_trying_response(
+    const common::SIPMessage& request) {
+
+    common::SIPMessage response;
+    response.start_line = "SIP/2.0 100 Trying";
+
+    const std::string via     = request.get_header("Via");
+    const std::string from    = request.get_header("From");
+    const std::string to      = request.get_header("To");
+    const std::string call_id = request.get_header("Call-ID");
+    const std::string cseq    = request.get_header("CSeq");
+
+    if (!via.empty())     response.add_header("Via",     via);
+    if (!from.empty())    response.add_header("From",    from);
+    if (!to.empty())      response.add_header("To",      to);
+    if (!call_id.empty()) response.add_header("Call-ID", call_id);
+    if (!cseq.empty())    response.add_header("CSeq",    cseq);
+    response.add_header("Content-Length", "0");
+
+    return response;
 }
 
 }

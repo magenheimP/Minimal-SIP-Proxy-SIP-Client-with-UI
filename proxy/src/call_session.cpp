@@ -62,11 +62,11 @@ namespace proxy
 
         if (old_state == new_state) {
             common::Logger::instance().log(
-                common::LogLevel::ERROR,
+                common::LogLevel::INFO,
                 "CallSession",
                 m_call_id,
-                "INVALID_TRANSITION",
-                "Event ignored in state " + to_string(old_state)
+                "STATE_UNCHANGED",
+                "Event had no state transition from " + to_string(old_state)
             );
         }
 
