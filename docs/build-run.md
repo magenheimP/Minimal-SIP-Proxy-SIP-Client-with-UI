@@ -154,7 +154,8 @@ Custom server:
 rm -rf build/
 cmake -B build
 cmake --build build
-./scripts/stress_test.sh
+sudo ./scripts/stress_test.sh
+and then enter your password
 ```
 
 ---
