@@ -8,7 +8,7 @@
 #   - Validates: No dropped messages, no deadlocks, stable latency
 ################################################################################
 
-set -euo pipefail
+set -uo pipefail
 
 # Colors for output
 RED='\033[0;31m'
@@ -47,6 +47,17 @@ CLIENT_STARTUP_WAIT=1
 REGISTER_WAIT=2
 INVITE_WAIT=5
 CLEANUP_WAIT=2
+# Extended testing options
+ENABLE_TCPDUMP=true
+TCPDUMP_INTERFACE="lo"
+TCPDUMP_PORT=5060
+TCPDUMP_FILE="${RESULTS_DIR}/sip_capture.pcap"
+
+ENABLE_RESOURCE_MONITORING=true
+RESOURCE_LOG="${RESULTS_DIR}/resource_usage.log"
+
+# For heavier stress scenario
+HIGH_LOAD_CLIENTS=100
 
 # Metrics
 declare -a CLIENT_PIDS
@@ -57,7 +68,60 @@ TIMEOUT_CLIENTS=0
 ################################################################################
 # Helper Functions
 ################################################################################
+start_tcpdump() {
+    if [ "$ENABLE_TCPDUMP" = true ]; then
+        log_info "Starting tcpdump capture on ${TCPDUMP_INTERFACE} (port ${TCPDUMP_PORT})..."
 
+        # -U = packet-buffered: flush to disk after each packet, prevents truncation
+        tcpdump -i "$TCPDUMP_INTERFACE" -U -w "$TCPDUMP_FILE" port "$TCPDUMP_PORT" \
+            > "${RESULTS_DIR}/tcpdump.log" 2>&1 &
+
+        TCPDUMP_PID=$!
+        sleep 0.5
+        local real_pid
+        real_pid=$(pgrep -n tcpdump 2>/dev/null || echo "$TCPDUMP_PID")
+        TCPDUMP_PID="$real_pid"
+
+        log_info "tcpdump started with PID: $TCPDUMP_PID"
+    fi
+}
+
+stop_tcpdump() {
+    if [ "$ENABLE_TCPDUMP" = true ] && [ -n "${TCPDUMP_PID:-}" ]; then
+        log_info "Stopping tcpdump..."
+
+        pkill -TERM tcpdump 2>/dev/null || true
+        kill -TERM "$TCPDUMP_PID" 2>/dev/null || true
+
+        local i=0
+        while kill -0 "$TCPDUMP_PID" 2>/dev/null && [ $i -lt 10 ]; do
+            sleep 0.5
+            i=$((i + 1))
+        done
+
+        log_success "tcpdump saved to $TCPDUMP_FILE"
+    fi
+}
+monitor_resources() {
+    while kill -0 "$PROXY_PID" 2>/dev/null; do
+        local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+
+        local proxy_stats
+        proxy_stats=$(ps -p "$PROXY_PID" -o %cpu,%mem --no-headers 2>/dev/null || echo "0.0 0.0")
+        echo "$timestamp | PROXY CPU/MEM: $proxy_stats" >> "$RESOURCE_LOG"
+
+        # Log all sip_client processes
+        local client_stats
+        client_stats=$(ps aux | grep sip_client | grep -v grep | awk '{print $2, $3, $4}')
+        if [ -n "$client_stats" ]; then
+            while IFS= read -r line; do
+                echo "$timestamp | CLIENT PID/CPU/MEM: $line" >> "$RESOURCE_LOG"
+            done <<< "$client_stats"
+        fi
+
+        sleep 1
+    done
+}
 log() {
     local level=$1
     shift
@@ -81,26 +145,30 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $*" | tee -a "${STRESS_LOG}"
 }
-
+cleanup_once=false
 cleanup() {
+    if [ "${cleanup_once:-false}" = true ]; then return; fi
+    cleanup_once=true
+
     log_info "Cleaning up processes..."
 
-    # Stop all clients
+    # 1. Stop monitor
+    if [ -n "${RESOURCE_MONITOR_PID:-}" ]; then
+        kill -TERM "$RESOURCE_MONITOR_PID" 2>/dev/null || true
+    fi
+
+    # 2. Stop clients
     for pid in "${CLIENT_PIDS[@]}"; do
-        if kill -0 "$pid" 2>/dev/null; then
-            kill -TERM "$pid" 2>/dev/null || true
-        fi
+        kill -TERM "$pid" 2>/dev/null || true
     done
 
-    # Stop proxy
-    if [ -n "${PROXY_PID:-}" ] && kill -0 "$PROXY_PID" 2>/dev/null; then
-        log_info "Stopping proxy (PID: $PROXY_PID)..."
+    # 3. Stop proxy
+    if [ -n "${PROXY_PID:-}" ]; then
         kill -TERM "$PROXY_PID" 2>/dev/null || true
-        sleep 1
-        if kill -0 "$PROXY_PID" 2>/dev/null; then
-            kill -KILL "$PROXY_PID" 2>/dev/null || true
-        fi
     fi
+
+    # 4. Stop tcpdump LAST — graceful flush, no force kill
+    stop_tcpdump
 
     log_info "Cleanup complete"
 }
@@ -492,8 +560,17 @@ main() {
     # Pre-flight checks
     check_binaries
 
+    # Start tcpdump before anything
+    start_tcpdump
+
     # Start proxy server
     start_proxy
+
+    # Start resource monitoring
+    if [ "$ENABLE_RESOURCE_MONITORING" = true ]; then
+        monitor_resources &
+        RESOURCE_MONITOR_PID=$!
+    fi
 
     # Run concurrent client tests
     run_concurrent_clients
@@ -504,7 +581,7 @@ main() {
 
     # Generate summary report
     generate_report
-
+    sleep 2
     # Cleanup (trap will handle this, but explicit call for clarity)
     # cleanup is called by trap
 
