@@ -186,6 +186,26 @@ namespace proxy {
             break;
 
         case RoutingAction::ForwardRequest:
+            if (result.has_trying_response) {
+                transport_.send(
+                    result.trying_response.serialize(),
+                    pkt.ip,
+                    pkt.port);
+
+                common::Logger::instance().log(
+                    "NETWORK",
+                    result.trying_response.get_header("Call-ID"),
+                    "SEND",
+                    "100 Trying sent to caller " + pkt.ip + ":" + std::to_string(pkt.port));
+
+                common::Logger::instance().log(
+                    common::LogLevel::INFO,
+                    "NETWORK",
+                    result.trying_response.get_header("Call-ID"),
+                    "SIP_MESSAGE_OUT",
+                    result.trying_response);
+            }
+
             if (result.contact) {
                 // contact = "user@ip:port"
                 std::string contact = *result.contact;
