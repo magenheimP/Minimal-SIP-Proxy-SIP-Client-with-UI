@@ -212,8 +212,6 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     result.message = forwarded_message;
     result.contact = *callee_contact;
     result.user = callee;
-    result.trying_response = make_trying_response(message);
-    result.has_trying_response = true;
 
     return result;
 }
@@ -580,28 +578,6 @@ void SIPRouter::strip_proxy_via(common::SIPMessage& message) {
             return;
         }
     }
-}
-
-common::SIPMessage SIPRouter::make_trying_response(
-    const common::SIPMessage& request) {
-
-    common::SIPMessage response;
-    response.start_line = "SIP/2.0 100 Trying";
-
-    const std::string via     = request.get_header("Via");
-    const std::string from    = request.get_header("From");
-    const std::string to      = request.get_header("To");
-    const std::string call_id = request.get_header("Call-ID");
-    const std::string cseq    = request.get_header("CSeq");
-
-    if (!via.empty())     response.add_header("Via",     via);
-    if (!from.empty())    response.add_header("From",    from);
-    if (!to.empty())      response.add_header("To",      to);
-    if (!call_id.empty()) response.add_header("Call-ID", call_id);
-    if (!cseq.empty())    response.add_header("CSeq",    cseq);
-    response.add_header("Content-Length", "0");
-
-    return response;
 }
 
 }
