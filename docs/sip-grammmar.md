@@ -1,359 +1,830 @@
-# SIP Grammar Reference (Simplified)
+# SIP Grammar Documentation
 
-## 1. Overview
+## Overview
 
-This document describes a simplified subset of the Session Initiation Protocol (SIP) used in this project.
+This document provides comprehensive documentation of the SIP (Session Initiation Protocol) message grammar and parsing implementation used in the Minimal SIP Proxy & SIP Client project. The SIP Grammar defines the structure and format of all SIP messages, including requests, responses, headers, and body content.
 
-The goal is not full RFC compliance, but a **minimal, consistent grammar** sufficient to support:
+## Table of Contents
 
-* REGISTER
-* INVITE
-* ACK
-* BYE
-* Basic SIP responses (100, 180, 200)
-
----
-
-## 2. General Message Structure
-
-A SIP message consists of:
-
-Start-Line
-Header1: value
-Header2: value
-...
-HeaderN: value
-
-(empty line)
-
-Body (optional)
-
-### Key Rules
-
-* Each line ends with `\r\n`
-* Headers and body are separated by an empty line (`\r\n`)
-* Header format: `Name: value`
-* Only the **first `:`** splits name and value
-* Header order MUST be preserved
-* Header names are **case-sensitive**
-* Multiple headers with the same name are allowed
+1. [SIP Message Structure](#sip-message-structure)
+2. [Start Line Grammar](#start-line-grammar)
+3. [Header Grammar](#header-grammar)
+4. [Message Body Grammar](#message-body-grammar)
+5. [SIP Parser Implementation](#sip-parser-implementation)
+6. [Parsing Rules](#parsing-rules)
+7. [Message Components](#message-components)
+8. [Common Header Fields](#common-header-fields)
+9. [Examples](#examples)
+10. [Parser Methods Reference](#parser-methods-reference)
 
 ---
 
-## 3. Start Line
+## SIP Message Structure
 
-### 3.1 Request Format
+The fundamental SIP message grammar consists of three primary components:
 
 ```
-METHOD sip:user@domain SIP/2.0
+SIP-Message = Start-Line
+              *( Header CRLF )
+              CRLF
+              [ Message-Body ]
 ```
+
+### Component Breakdown
+
+- **Start-Line**: Either a request line (for requests) or a status line (for responses)
+- **Headers**: Zero or more SIP header fields, each terminated by CRLF
+- **Blank Line**: CRLF that separates headers from body
+- **Message-Body**: Optional message content (typically SDP for media negotiation)
+
+### Message Delimiters
+
+The parser recognizes two types of message delimiters:
+
+| Delimiter | Type | Usage |
+|-----------|------|-------|
+| `\r\n\r\n` | Strict CRLF | RFC 3261 compliant, preferred |
+| `\n\n` | LF only | Lenient parsing, accepted for compatibility |
+
+---
+
+## Start Line Grammar
+
+### Request Line Format
+
+```
+Request-Line = Method SP Request-URI SP SIP-Version CRLF
 
 Example:
-
-```
-INVITE sip:bob@localhost SIP/2.0
+INVITE sip:bob@biloxi.com SIP/2.0
 ```
 
-### 3.2 Response Format
+**Components:**
+
+- **Method**: SIP method name (INVITE, REGISTER, BYE, etc.)
+- **Request-URI**: Target SIP URI
+- **SIP-Version**: Protocol version (typically "SIP/2.0")
+
+### Response Line Format
 
 ```
-SIP/2.0 Status-Code Reason-Phrase
-```
+Status-Line = SIP-Version SP Status-Code SP Reason-Phrase CRLF
 
 Example:
-
-```
 SIP/2.0 200 OK
 ```
 
+**Components:**
+
+- **SIP-Version**: Protocol version
+- **Status-Code**: Three-digit numeric code (1xx, 2xx, 3xx, 4xx, 5xx, 6xx)
+- **Reason-Phrase**: Human-readable explanation of status
+
+### Start-Line Parsing
+
+The parser stores the entire start line as-is without decomposition:
+
+```cpp
+message.start_line = line;  // Complete start line stored as string
+```
+
+This approach preserves the exact format and allows downstream components to parse request or response details as needed.
+
 ---
 
-## 4. Supported Methods
+## Header Grammar
 
-The system supports the following SIP methods:
+### Header Field Format
 
-* REGISTER
-* INVITE
-* ACK
-* BYE
-
----
-
-## 5. Core Headers
-
-### 5.1 Via
-
-Tracks the transport path.
+```
+Header-Field = Field-Name ":" Field-Value CRLF
 
 Example:
+Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds
+From: sip:alice@atlanta.com
+To: sip:bob@biloxi.com
+```
+
+### Header Structure
+
+| Component | Description |
+|-----------|-------------|
+| **Field-Name** | Case-insensitive header name, preceding the colon |
+| **Colon** | Separates field name from value (`:`) |
+| **Field-Value** | Header value, may contain whitespace and special characters |
+| **CRLF** | Line terminator |
+
+### Whitespace Handling
+
+The parser trims leading and trailing whitespace from both field names and values:
+
+```cpp
+const std::string name = trim(line.substr(0, separator_pos));
+const std::string value = trim(line.substr(separator_pos + 1));
+```
+
+**Trimming Rules:**
+
+- **Trim characters**: Space (` `) and tab (`\t`)
+- **Location**: Both leading and trailing positions
+- **Example**: `"  From:  sip:alice@atlanta.com  "` becomes name=`"From"`, value=`"sip:alice@atlanta.com"`
+
+### Multiple Headers with Same Name
+
+SIP allows multiple header fields with the same name:
 
 ```
-Via: SIP/2.0/UDP 192.168.1.10:5060
+Route: <sip:proxy1.atlanta.com>
+Route: <sip:proxy2.biloxi.com>
+Route: <sip:proxy3.chicago.com>
+```
+
+These are stored as separate entries in the headers vector and can be retrieved as a collection.
+
+---
+
+## Message Body Grammar
+
+### Body Structure
+
+```
+Message-Body = *OCTET
+```
+
+The message body is optional and contains arbitrary octets. Common body formats include:
+
+- **SDP (Session Description Protocol)**: For media description
+- **Plain text**: For messaging
+- **XML**: For presence and event notifications
+- **ISUP**: For telephony signaling
+
+### Body Length Determination
+
+The parser respects the **Content-Length** header to determine body size:
+
+```cpp
+int content_length = get_content_length(message);
+
+if (content_length < 0) {
+    // No Content-Length header; use entire remaining body
+    message.body = raw_body;
+} else {
+    // Use only content_length bytes
+    std::size_t safe_length = std::min(raw_body.size(), 
+                                       static_cast<std::size_t>(content_length));
+    message.body = raw_body.substr(0, safe_length);
+}
+```
+
+### Content-Length Header
+
+- **Presence**: Optional but recommended
+- **Value**: Integer representing byte count of message body
+- **Handling**: If absent, entire remaining data is treated as body
+- **Safety**: Parser clamps body length to prevent buffer overruns
+
+---
+
+## SIP Parser Implementation
+
+### Parser Class: `SIPParser`
+
+Located in: `proxy/include/proxy/sip_parser.hpp` and `proxy/src/sip_parser.cpp`
+
+### Parser Architecture
+
+The `SIPParser` class uses a **top-down, multi-stage parsing approach**:
+
+```cpp
+class SIPParser {
+public:
+    static common::SIPMessage parse(const std::string& raw_message);
+    
+private:
+    static void parse_start_line(common::SIPMessage& message,
+                                const std::string& line);
+    
+    static void parse_header_line(common::SIPMessage& message,
+                                   const std::string& line);
+    
+    static void parse_body(common::SIPMessage& message,
+                          const std::string& raw_body);
+    
+    static int get_content_length(const common::SIPMessage& message);
+    
+    static std::string trim(const std::string& value);
+};
 ```
 
 ---
 
-### 5.2 From
+## Parsing Rules
 
-Identifies the caller.
+### Rule 1: Message Separation (Headers from Body)
 
-Example:
+The parser identifies the separator between headers and message body:
 
+```cpp
+std::size_t separator_pos = raw_message.find("\r\n\r\n");
+std::size_t separator_length = 4;
+
+if (separator_pos == std::string::npos) {
+    separator_pos = raw_message.find("\n\n");
+    separator_length = 2;
+}
 ```
-From: <sip:alice@localhost>
+
+**Logic:**
+1. First, attempt to find strict CRLF separator (`\r\n\r\n`)
+2. If not found, fall back to lenient LF separator (`\n\n`)
+3. If neither found, treat entire message as headers (no body)
+
+### Rule 2: Start Line Processing
+
+The first non-empty line of the message is treated as the start line:
+
+```cpp
+bool first_line = true;
+
+while (std::getline(stream, line)) {
+    if (!line.empty() && line.back() == '\r') {
+        line.pop_back();  // Remove trailing CR if present
+    }
+    
+    if (line.empty()) {
+        continue;
+    }
+    
+    if (first_line) {
+        parse_start_line(message, line);
+        first_line = false;
+        continue;
+    }
+    
+    parse_header_line(message, line);
+}
+```
+
+**Processing:**
+- Skip empty lines at the beginning
+- Designate first non-empty line as start line
+- Remove any trailing carriage return
+- Process remaining lines as headers
+
+### Rule 3: Header Line Parsing
+
+Each header line is parsed by splitting on the first colon:
+
+```cpp
+const std::size_t separator_pos = line.find(':');
+
+if (separator_pos == std::string::npos) {
+    return;  // Invalid header; skip it
+}
+
+const std::string name = trim(line.substr(0, separator_pos));
+const std::string value = trim(line.substr(separator_pos + 1));
+
+if (name.empty()) {
+    return;  // Empty name; skip
+}
+
+message.add_header(name, value);
+```
+
+**Processing:**
+1. Find the first colon in the line
+2. Text before colon = header name
+3. Text after colon = header value
+4. Trim whitespace from both
+5. Reject if name is empty
+6. Add to message headers
+
+### Rule 4: Body Handling
+
+The body is extracted and length-validated:
+
+```cpp
+const int content_length = get_content_length(message);
+
+if (content_length < 0) {
+    message.body = raw_body;
+} else {
+    const std::size_t safe_length = std::min(raw_body.size(), 
+                                             static_cast<std::size_t>(content_length));
+    message.body = raw_body.substr(0, safe_length);
+}
+```
+
+**Processing:**
+1. Query Content-Length header
+2. If absent or invalid, use entire raw_body
+3. If present, extract only the specified number of bytes
+4. Safely handle cases where raw_body is shorter than Content-Length
+
+### Rule 5: Carriage Return Handling
+
+The parser is lenient with line endings:
+
+```cpp
+if (!line.empty() && line.back() == '\r') {
+    line.pop_back();
+}
+```
+
+**Behavior:**
+- Lines ending with `\r\n` have the `\r` stripped by `std::getline`
+- Lines ending with `\n` are handled normally
+- The parser removes any remaining trailing `\r`
+
+---
+
+## Message Components
+
+### SIPMessage Structure
+
+```cpp
+struct SIPMessage {
+    std::string start_line;
+    std::vector<SIPHeader> headers;
+    std::string body;
+    
+    // Header operations
+    std::string get_header(const std::string& name) const;
+    void set_header(const std::string& name, const std::string& value);
+    void add_header(const std::string& name, const std::string& value);
+    bool has_header(const std::string& name) const;
+    std::vector<std::string> get_headers(const std::string& name) const;
+    void prepend_header(const std::string& name, const std::string& value);
+    bool remove_first_header(const std::string& name);
+    
+    // Message type detection
+    bool is_request() const;
+    bool is_response() const;
+    
+    // Content extraction
+    std::string get_method() const;
+    int get_status_code() const;
+    
+    // Serialization
+    void update_content_length();
+    std::string serialize() const;
+};
+```
+
+### SIPHeader Structure
+
+```cpp
+struct SIPHeader {
+    std::string name;
+    std::string value;
+};
 ```
 
 ---
 
-### 5.3 To
+## Common Header Fields
 
-Identifies the callee.
+### Mandatory Headers
 
-Example:
+| Header | Purpose | Format |
+|--------|---------|--------|
+| **Via** | Route tracking, response routing | `Via: SIP/2.0/UDP host[:port]` |
+| **From** | Message originator | `From: <sip:user@domain>;tag=xyz` |
+| **To** | Message recipient | `To: <sip:user@domain>;tag=abc` |
+| **Call-ID** | Unique call identifier | `Call-ID: abc123@host.com` |
+| **CSeq** | Sequence number and method | `CSeq: 1 INVITE` |
 
-```
-To: <sip:bob@localhost>
-```
+### Important Headers
 
----
+| Header | Purpose | Format |
+|--------|---------|--------|
+| **Contact** | Return address for requests | `Contact: <sip:user@host>` |
+| **Content-Type** | Body MIME type | `Content-Type: application/sdp` |
+| **Content-Length** | Body byte count | `Content-Length: 1234` |
+| **Route** | Routing information | `Route: <sip:proxy@host>` |
+| **Expires** | Expiration time | `Expires: 3600` |
 
-### 5.4 Call-ID
+### Request Methods
 
-Unique identifier for a SIP session.
+The most common SIP request methods include:
 
-Example:
+| Method | Purpose | Direction |
+|--------|---------|-----------|
+| **INVITE** | Session initiation | Client → Server |
+| **REGISTER** | User registration | Client → Server |
+| **BYE** | Session termination | Either direction |
+| **CANCEL** | Request cancellation | Client → Server |
+| **OPTIONS** | Server capabilities | Either direction |
+| **ACK** | INVITE confirmation | Client → Server |
 
-```
-Call-ID: abc123@localhost
-```
+### Response Status Codes
 
----
+SIP response status codes follow standard conventions:
 
-### 5.5 CSeq
-
-Sequence number and method.
-
-Example:
-
-```
-CSeq: 1 INVITE
-```
-
----
-
-### 5.6 Contact
-
-Specifies where the user can be reached.
-
-Example:
-
-```
-Contact: <sip:alice@192.168.1.10>
-```
-
----
-
-### 5.7 Content-Length
-
-Length of the message body in bytes.
-
-Example:
-
-```
-Content-Length: 0
-```
-
-### Rules
-
-* MUST always be present
-* MUST be updated by serializer
-* MUST match actual body size
+| Range | Category | Examples |
+|-------|----------|----------|
+| **1xx** | Provisional | 100 Trying, 180 Ringing |
+| **2xx** | Success | 200 OK, 202 Accepted |
+| **3xx** | Redirection | 300 Multiple Choices, 301 Moved |
+| **4xx** | Client Error | 400 Bad Request, 401 Unauthorized |
+| **5xx** | Server Error | 500 Server Internal Error |
+| **6xx** | Global Failure | 600 Busy Everywhere |
 
 ---
 
-## 6. Minimal Message Examples
+## Examples
 
-### 6.1 REGISTER
+### Example 1: INVITE Request
 
 ```
-REGISTER sip:localhost SIP/2.0
-Via: SIP/2.0/UDP 192.168.1.10:5060
-From: <sip:alice@localhost>
-To: <sip:alice@localhost>
-Call-ID: reg123
+INVITE sip:bob@biloxi.com SIP/2.0
+Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds
+Max-Forwards: 70
+To: Bob <sip:bob@biloxi.com>
+From: Alice <sip:alice@atlanta.com>;tag=1928301774
+Call-ID: a84b4c76e66710@pc33.atlanta.com
+CSeq: 314159 INVITE
+Contact: <sip:alice@pc33.atlanta.com>
+Content-Type: application/sdp
+Content-Length: 142
+
+v=0
+o=UserA 2890844526 2890844527 IN IP4 192.0.2.1
+s=Session SDP
+c=IN IP4 192.0.2.1
+t=0 0
+m=audio 49172 RTP/AVP 0
+a=rtpmap:0 PCMU/8000
+```
+
+**Parsing Breakdown:**
+- **Start Line**: `INVITE sip:bob@biloxi.com SIP/2.0`
+- **Headers**: 8 header fields (Via, Max-Forwards, To, From, Call-ID, CSeq, Contact, Content-Type, Content-Length)
+- **Body**: 6 lines of SDP (Session Description Protocol)
+
+### Example 2: Response Message
+
+```
+SIP/2.0 200 OK
+Via: SIP/2.0/UDP server10.biloxi.com;branch=z9hG4bKnashds8
+Via: SIP/2.0/UDP bigbox3.site3.atlanta.com
+Via: SIP/2.0/UDP pc33.atlanta.com;branch=z9hG4bK776asdhds
+To: Bob <sip:bob@biloxi.com>;tag=a6c85cf
+From: Alice <sip:alice@atlanta.com>;tag=1928301774
+Call-ID: a84b4c76e66710@pc33.atlanta.com
+CSeq: 314159 INVITE
+Contact: <sip:bob@192.0.2.4>
+Content-Type: application/sdp
+Content-Length: 131
+
+v=0
+o=UserB 2890844526 2890844527 IN IP4 192.0.2.4
+s=Session SDP
+c=IN IP4 192.0.2.4
+t=0 0
+m=audio 49172 RTP/AVP 0
+a=rtpmap:0 PCMU/8000
+```
+
+**Parsing Breakdown:**
+- **Start Line**: `SIP/2.0 200 OK` (Response)
+- **Via Headers**: 3 entries (stacked from route)
+- **Body**: SDP from recipient
+
+### Example 3: REGISTER Request
+
+```
+REGISTER sip:registrar.atlanta.com SIP/2.0
+Via: SIP/2.0/UDP client.atlanta.com:5060;branch=z9hG4bKnashds7
+Max-Forwards: 70
+From: <sip:user@atlanta.com>;tag=xyz
+To: <sip:user@atlanta.com>
+Call-ID: xyz@client.atlanta.com
 CSeq: 1 REGISTER
-Contact: <sip:alice@192.168.1.10>
+Contact: <sip:user@client.atlanta.com>
+Expires: 3600
 Content-Length: 0
+
+```
+
+**Parsing Breakdown:**
+- **Start Line**: `REGISTER sip:registrar.atlanta.com SIP/2.0`
+- **Headers**: Standard registration headers
+- **Body**: None (Content-Length: 0)
+
+---
+
+## Parser Methods Reference
+
+### Public Methods
+
+#### `parse(const std::string& raw_message)`
+
+```cpp
+static common::SIPMessage parse(const std::string& raw_message);
+```
+
+**Purpose**: Parse a complete SIP message from raw string
+
+**Parameters:**
+- `raw_message`: Raw SIP message string (may contain `\r\n` or `\n` line endings)
+
+**Returns**: `common::SIPMessage` object with populated fields
+
+**Algorithm:**
+1. Find header/body separator
+2. Extract header and body sections
+3. Parse start line
+4. Parse header lines
+5. Parse message body
+6. Return structured message
+
+**Example:**
+```cpp
+std::string raw = "INVITE sip:bob@biloxi.com SIP/2.0\r\nVia: SIP/2.0/UDP pc33\r\n\r\n";
+common::SIPMessage msg = SIPParser::parse(raw);
 ```
 
 ---
 
-### 6.2 INVITE
+### Private Methods
 
+#### `parse_start_line(common::SIPMessage& message, const std::string& line)`
+
+```cpp
+static void parse_start_line(common::SIPMessage& message,
+                            const std::string& line);
 ```
-INVITE sip:bob@localhost SIP/2.0
-Via: SIP/2.0/UDP 192.168.1.10:5060
-From: <sip:alice@localhost>
-To: <sip:bob@localhost>
-Call-ID: call123
-CSeq: 1 INVITE
-Contact: <sip:alice@192.168.1.10>
-Content-Length: 0
-```
+
+**Purpose**: Parse the first line of a SIP message
+
+**Parameters:**
+- `message`: Reference to SIPMessage to populate
+- `line`: The start line string
+
+**Behavior:**
+- Stores the entire line as-is in `message.start_line`
+- No decomposition or validation
+- Allows downstream processing to determine request vs. response
+
+**Note**: The actual decomposition (method/URI/version or version/code/phrase) is done by higher-level handlers, not this parser.
 
 ---
 
-## 7. Basic Call Flow
+#### `parse_header_line(common::SIPMessage& message, const std::string& line)`
 
-### Call Setup
+```cpp
+static void parse_header_line(common::SIPMessage& message,
+                              const std::string& line);
+```
 
-1. Client A → Proxy: INVITE
+**Purpose**: Parse a single header line
 
-2. Proxy → Client B: INVITE
+**Parameters:**
+- `message`: Reference to SIPMessage to populate
+- `line`: A single header line (e.g., "From: sip:alice@atlanta.com")
 
-3. Client B → Proxy: 100 Trying
+**Algorithm:**
+1. Find the colon (`:`)
+2. If not found, skip the line
+3. Extract name and value using colon position
+4. Trim whitespace from both
+5. If name is empty, skip
+6. Otherwise, add header to message
 
-4. Proxy → Client A: 100 Trying
-
-5. Client B → Proxy: 180 Ringing
-
-6. Proxy → Client A: 180 Ringing
-
-7. Client B → Proxy: 200 OK
-
-8. Proxy → Client A: 200 OK
-
-9. Client A → Proxy: ACK
-
-10. Proxy → Client B: ACK
-
-Call is now established.
+**Behavior:**
+- Supports multiple headers with the same name
+- Case-preserves field names
+- Preserves field value exactly (except whitespace trimming)
 
 ---
 
-### Call Termination
+#### `parse_body(common::SIPMessage& message, const std::string& raw_body)`
 
-1. Client A → Proxy: BYE
+```cpp
+static void parse_body(common::SIPMessage& message,
+                      const std::string& raw_body);
+```
 
-2. Proxy → Client B: BYE
+**Purpose**: Extract and validate message body
 
-3. Client B → Proxy: 200 OK
+**Parameters:**
+- `message`: Reference to SIPMessage to populate (may contain headers)
+- `raw_body`: Raw body string extracted from message
 
-4. Proxy → Client A: 200 OK
+**Algorithm:**
+1. If raw_body is empty, set message.body to empty and return
+2. Query Content-Length header
+3. If Content-Length is absent or invalid, use entire raw_body
+4. If Content-Length is present:
+   - Clamp length to actual raw_body size
+   - Extract substring of specified length
+5. Set message.body
 
-Call is terminated.
+**Safety:**
+- Prevents buffer overruns by clamping to actual size
+- Handles missing Content-Length gracefully
+- Rejects malformed Content-Length values
 
 ---
 
-## 8. Header Injection (Client Feature)
+#### `get_content_length(const common::SIPMessage& message)`
 
-The client can modify outgoing messages by:
-
-### Adding Headers
-
-```
-X-Debug-ID: 777
+```cpp
+static int get_content_length(const common::SIPMessage& message);
 ```
 
-Rules:
+**Purpose**: Extract Content-Length from message headers
 
-* Appended to the end of header list
-* Must be preserved by proxy
+**Parameters:**
+- `message`: SIPMessage to query
+
+**Returns:**
+- Integer body length if Content-Length header is present and valid
+- `-1` if absent or unparseable
+
+**Algorithm:**
+1. Query "Content-Length" header (case-sensitive)
+2. Return -1 if header is empty or not found
+3. Attempt to parse as integer using `std::stoi`
+4. Return parsed value or -1 on exception
+
+**Note**: Header lookup is case-sensitive in the current implementation.
 
 ---
 
-### Replacing Headers
+#### `trim(const std::string& value)`
 
-Example:
-
-```
-Via: SIP/2.0/UDP 10.0.0.99:5060
+```cpp
+static std::string trim(const std::string& value);
 ```
 
-Rules:
+**Purpose**: Remove leading and trailing whitespace
 
-* Replace first matching header
-* If not found → add new header
+**Parameters:**
+- `value`: String to trim
+
+**Returns**: Trimmed string (or empty string if all whitespace)
+
+**Algorithm:**
+1. Find first non-whitespace character (not space, not tab)
+2. Find last non-whitespace character
+3. Return substring between these positions
+4. Return empty string if no non-whitespace found
+
+**Whitespace Characters Trimmed:**
+- Space (` `, ASCII 32)
+- Tab (`\t`, ASCII 9)
+
+**Example:**
+- Input: `"  From: alice  "`
+- Output: `"From: alice"`
 
 ---
 
-## 9. Proxy Requirements for Headers
+## Error Handling
 
-The proxy MUST:
+### Parser Robustness
 
-* Parse all headers correctly
-* Preserve header order
-* Forward all headers unchanged (unless explicitly modified)
-* Support duplicate headers
-* Log:
+The SIP parser is designed to be lenient and forgiving:
 
+| Condition | Behavior |
+|-----------|----------|
+| Invalid header (no colon) | Header line is skipped silently |
+| Empty header name | Header line is skipped silently |
+| Missing Content-Length | Entire remaining data used as body |
+| Invalid Content-Length | Entire remaining data used as body |
+| No separator found | Entire message treated as headers |
+| Mixed line endings | Both `\r\n` and `\n` accepted |
+| Trailing `\r` in lines | Automatically removed |
+| Empty lines between headers | Skipped silently |
+
+### Exception Handling
+
+The parser uses try-catch for Content-Length parsing:
+
+```cpp
+try {
+    return std::stoi(value);  // Convert to integer
+} catch (...) {
+    return -1;  // Return -1 on any exception
+}
 ```
-[CUSTOM HEADER] X-Debug-ID: 777
-[HEADER MODIFIED] Via: ...
-```
+
+This prevents crashes from malformed numeric values.
 
 ---
 
-## 10. Parsing Rules
+## Integration Points
 
-The SIP parser MUST follow these steps:
+### Consumer Components
 
-1. Split message by `\r\n`
-2. First line → Start-Line
-3. Read headers until empty line
-4. For each header:
+#### SIP Proxy (`proxy/src/`)
+- Uses `SIPParser::parse()` to deserialize received UDP packets
+- Processes parsed messages for routing and forwarding
+- Modifies headers and re-serializes for transmission
 
-    * Split at first `:`
-    * Trim whitespace
-5. After empty line:
+#### SIP Client (`client/src/`)
+- Uses `SIPParser::parse()` to handle received responses
+- Processes parsed messages for session management
+- Generates requests using `SIPMessageFactory`
 
-    * Remaining bytes = body
-6. Validate Content-Length
-
----
-
-## 11. Serialization Rules
-
-When rebuilding a SIP message:
-
-* Preserve header order
-* Preserve duplicate headers
-* Recalculate `Content-Length`
-* Ensure correct formatting:
-
-```
-Start-Line\r\n
-Header: value\r\n
-...\r\n
-\r\n
-Body
-```
+#### Tests (`tests/parser_tests.cpp`)
+- Unit tests for parser functionality
+- Validates parsing of various SIP messages
+- Tests error conditions and edge cases
 
 ---
 
-## 12. Non-Goals (Out of Scope)
+## RFC Compliance
 
-This project does NOT implement:
+This implementation is based on **RFC 3261 (SIP: Session Initiation Protocol)** with the following notes:
 
-* Full SIP RFC compliance
-* Authentication (Digest, etc.)
-* TCP transport (optional extension)
-* SDP parsing (body may remain empty)
-* Advanced routing logic
+### Compliant Areas
+- Message structure (start line, headers, body)
+- Header format and parsing
+- Content-Length handling
+- Support for multiple headers with same name
+
+### Lenient Areas
+- Accepts both `\r\n` and `\n` line endings (RFC requires `\r\n`)
+- Stores start line as-is without full parsing (allows flexibility)
+- No validation of header field values against grammar
+
+### Not Implemented
+- Strict grammar validation for all header fields
+- Compact header form (e.g., `f` for `From`)
+- Header field parameter parsing
+- SIP URI parsing
+- Authentication challenge handling
 
 ---
 
-## 13. Summary
+## Performance Considerations
 
-This simplified SIP grammar ensures:
+### Time Complexity
+- **Message parsing**: O(n) where n = total message length
+- **Header lookup**: O(h) where h = number of headers
+- **Start-line parsing**: O(1) (no parsing, just storage)
 
-* Predictable parsing
-* Correct message forwarding
-* Support for header injection
-* Compatibility between client and proxy
+### Space Complexity
+- **Message storage**: O(n) (entire message in memory)
+- **Header vector**: O(h) (linear with header count)
 
-It is intentionally minimal to focus on:
+### Optimization Opportunities
+1. **Lazy parsing**: Don't parse body until accessed
+2. **Header indexing**: Create map for O(1) header lookup
+3. **Streaming**: Process message in chunks rather than loading all at once
+4. **Compact form**: Support compressed header notation
 
-* Networking
-* Concurrency
-* System design
+---
+
+## Future Enhancements
+
+1. **Full Start-Line Decomposition**
+   - Parse request line into method, URI, version
+   - Parse status line into code and reason
+   - Validate against SIP grammar
+
+2. **Header Field Validation**
+   - Validate format of specific headers (Via, From, To, etc.)
+   - Parse header parameters (tags, branches, etc.)
+   - Enforce mandatory headers
+
+3. **URI Parsing**
+   - Full SIP URI parsing and validation
+   - Support for tel: and mailto: schemes
+
+4. **Content-Negotiation**
+   - Parse Content-Type header
+   - Validate Content-Type vs. body content
+
+5. **Security**
+   - Add hooks for message authentication
+   - Support SIP identity verification
+
+---
+
+## References
+
+- **RFC 3261**: SIP: Session Initiation Protocol
+- **RFC 3262**: Reliability of Provisional Responses in SIP
+- **RFC 3265**: Session Initiation Protocol (SIP) Event Notification
+- **SDP (Session Description Protocol)**: RFC 4566
+
+---
+
+## Document Metadata
+
+| Attribute | Value |
+|-----------|-------|
+| **Version** | 1.0 |
+| **Last Updated** | March 2026 |
+| **Author** | Documentation Team |
+| **Project** | Minimal SIP Proxy & SIP Client |
+| **Status** | Complete |
+
+---
+
+**End of SIP Grammar Documentation**

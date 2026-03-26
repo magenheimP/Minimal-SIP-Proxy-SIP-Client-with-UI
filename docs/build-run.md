@@ -19,7 +19,7 @@ It supports basic SIP call flow (REGISTER, INVITE, BYE) over UDP.
 ## Clone Repository
 
 ```
-git clone <repo-url>
+git clone https://github.com/magenheimP/Minimal-SIP-Proxy-SIP-Client-with-UI.git
 cd Minimal-SIP-Proxy-SIP-Client-with-UI
 ```
 
@@ -113,6 +113,15 @@ Use the helper script:
 ```
 ./scripts/run_client.sh [mode] [ip] [port]
 ```
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `[mode]` | `--cli` | `--cli` runs a terminal interface. `--ui` launches the Qt graphical window. |
+| `[ip]` | `127.0.0.1` | IP address of the **SIP Proxy** to connect to. Not the client's own IP. |
+| `[port]` | `5060` | UDP port the **SIP Proxy** is listening on. Must match the proxy's configured port. |
+
+
 
 ### Examples
 
@@ -182,21 +191,21 @@ Run client B (bob)
 4. Bob answers
 5. Alice hangs up
 6. Bob receives end of call
-7. Bob exits
-8. Alice exits
+7. Bob exits the client
+8. Alice exits the client
 
 ---
 
 ## Troubleshooting
 
-* **Port 5060 already in use**
-  → Kill the process or change port
 
-* **No response from proxy**
-  → Check firewall / IP
+* **Port 5060 already in use** *(SIP Proxy)*
+  → The proxy failed to bind to port 5060 on startup. Kill the process occupying the port or change the proxy's listen port.
 
-* **Build fails**
-  → Ensure CMake version is correct
+* **No response from proxy** *(SIP Client)*
+  → The client sent a SIP message but received no reply. Verify the proxy is running and that the `[ip]` and `[port]` passed to the client match the proxy's actual address and listen port. Check that UDP traffic is not blocked by a firewall.
+
+* **Build fails** *(SIP Proxy & SIP Client)*
+  → Ensure CMake 3.20+ is installed
   → Ensure Qt is installed (`qtbase5-dev`)
-
 ---
