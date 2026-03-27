@@ -11,11 +11,18 @@
 
 namespace common {
 
+    enum class TransportType {
+        UDP,
+        TCP
+    };
+
     struct RawPacket
     {
         std::string data;
         std::string ip;
         uint16_t port;
+
+        TransportType transport = TransportType::UDP;
     };
 
 }
