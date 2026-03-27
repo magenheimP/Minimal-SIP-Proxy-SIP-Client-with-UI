@@ -36,9 +36,6 @@ namespace proxy {
         uint16_t port = 0;
 
         std::string user;
-
-        common::SIPMessage trying_response;
-        bool has_trying_response = false;
     };
 
     struct CallContext {
@@ -83,9 +80,6 @@ namespace proxy {
 
         static common::SIPMessage make_error_response(
             const std::string& status,
-            const common::SIPMessage& request);
-
-        static common::SIPMessage make_trying_response(
             const common::SIPMessage& request);
 
         void store_call_context(const common::SIPMessage& message,
