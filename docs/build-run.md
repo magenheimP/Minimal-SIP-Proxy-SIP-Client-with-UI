@@ -118,7 +118,7 @@ Use the helper script:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `[mode]` | `--cli` | `--cli` runs a terminal interface. `--ui` launches the Qt graphical window. |
-| `[ip]` | `127.0.0.1` | IP address of the **SIP Proxy** to connect to. Not the client's own IP. |
+| `[ip]` | `127.0.0.1` | IP address of the **SIP Proxy** to connect to. |
 | `[port]` | `5060` | UDP port the **SIP Proxy** is listening on. Must match the proxy's configured port. |
 
 
@@ -196,16 +196,113 @@ Run client B (bob)
 
 ---
 
-## Troubleshooting
+## Troubleshooting SIP Proxy
 
+### Port 5060 already in use
 
-* **Port 5060 already in use** *(SIP Proxy)*
-  → The proxy failed to bind to port 5060 on startup. Kill the process occupying the port or change the proxy's listen port.
+The proxy failed to bind to port `5060` on startup.
 
-* **No response from proxy** *(SIP Client)*
-  → The client sent a SIP message but received no reply. Verify the proxy is running and that the `[ip]` and `[port]` passed to the client match the proxy's actual address and listen port. Check that UDP traffic is not blocked by a firewall.
+**Possible fixes:**
 
-* **Build fails** *(SIP Proxy & SIP Client)*
-  → Ensure CMake 3.20+ is installed
-  → Ensure Qt is installed (`qtbase5-dev`)
+* Stop the process currently using the port:
+
+  ```
+  sudo lsof -i :5060
+  sudo kill -9 <PID>
+  ```
+* Or change the proxy’s listening port in your configuration/code.
+
 ---
+
+### Proxy fails to start
+
+The executable runs but exits immediately or shows errors.
+
+**Possible fixes:**
+
+* Ensure all required source files are compiled
+* Rebuild the project:
+
+  ```
+  rm -rf build/
+  cmake -B build
+  cmake --build build
+  ```
+* Verify compiler supports **C++20**
+
+---
+
+### No incoming messages
+
+The proxy is running but not receiving SIP messages.
+
+**Possible fixes:**
+
+* Check firewall settings (UDP traffic on port 5060 must be allowed)
+* Ensure the client is sending to the correct IP and port
+* Verify the proxy is bound to the correct network interface
+
+---
+
+## Troubleshooting SIP Client
+
+### No response from proxy
+
+The client sends requests but receives no reply.
+
+**Possible fixes:**
+
+* Ensure the SIP Proxy is running
+* Verify IP and port:
+
+  ```
+  ./scripts/run_client.sh --cli 127.0.0.1 5060
+  ```
+* Check firewall settings (UDP must not be blocked)
+
+---
+
+### Client fails to start
+
+The client does not launch or crashes immediately.
+
+**Possible fixes:**
+
+* Rebuild the project:
+
+  ```
+  rm -rf build/
+  cmake -B build
+  cmake --build build
+  ```
+* Ensure all dependencies are installed (especially Qt for UI mode)
+
+---
+
+### UI mode not working
+
+The client runs in CLI but fails in UI mode.
+
+**Possible fixes:**
+
+* Verify Qt is installed:
+
+  ```
+  sudo apt install qtbase5-dev
+  ```
+* Ensure you are running in an environment that supports GUI (not pure SSH without X11)
+
+---
+
+### Call setup fails (INVITE issues)
+
+Calls are not established between clients.
+
+**Possible fixes:**
+
+* Ensure both clients are registered before calling
+* Verify usernames/IDs are correct
+* Check proxy logs for routing issues
+
+---
+
