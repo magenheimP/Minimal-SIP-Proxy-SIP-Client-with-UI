@@ -88,6 +88,9 @@ int main(int argc, char* argv[])
                 [&qt_app](const std::string& call_id, const std::string& caller) {
                     qt_app.notify_incoming_call(call_id, caller);
                 });
+            sip_client.set_call_error_callback([&qt_app](int code, const std::string& reason) {
+                 qt_app.notify_call_error(code, reason);
+                });
 
             sip_client.start_transport();
 

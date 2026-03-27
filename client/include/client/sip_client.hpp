@@ -20,7 +20,8 @@ public:
 
     void send_to_server(const std::string& message);
     const std::string& local_ip() const;
-
+    using ErrorCallback = std::function<void(int, const std::string&)>;
+    void set_call_error_callback(ErrorCallback cb);
     bool wait_for_register_response(int timeout_seconds);
     void reset_receive_state();
 
@@ -62,6 +63,7 @@ private:
 
     ResponseCallback register_response_cb_;
     StateCallback call_state_cb_;
+    ErrorCallback call_error_cb_;
     std::function<void(const std::string&, const std::string&)> incoming_call_cb_;
     std::unordered_map<std::string, std::string> pending_headers_;
     void on_packet_received(const std::string& data,
