@@ -5,6 +5,7 @@
 #include "../include/proxy/sip_router.hpp"
 #include "../../common/include/common/logger.hpp"
 #include <unordered_set>
+#include "../../metrics/include/metrics_coollector.hpp"
 
 namespace proxy {
 
@@ -201,6 +202,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
     session->on_request(message);
 
+    MetricsCollector::instance().inc_active_calls();
     common::Logger::instance().log(
         "SIPRouter",
         call_id,
@@ -316,7 +318,7 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
     if (session) {
         session->on_request(message);
     }
-
+    MetricsCollector::instance().dec_active_calls();
     common::Logger::instance().log(
         "SIPRouter",
         call_id,

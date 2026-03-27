@@ -14,6 +14,7 @@ target_link_libraries(sip_proxy
         proxy
         common
         networking
+        metrics
 )
 
 add_executable(sip_client

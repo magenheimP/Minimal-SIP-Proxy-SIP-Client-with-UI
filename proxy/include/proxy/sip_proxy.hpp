@@ -17,6 +17,7 @@
 #include "../proxy/register_handler.hpp"
 
 #include "../proxy/sip_router.hpp"
+#include "../../../metrics/include/metrics_server.hpp"
 
 namespace proxy {
 
@@ -45,6 +46,8 @@ namespace proxy {
         RegistrationTable registration_table_;
         RegisterHandler register_handler_;
         SIPRouter router_;
+
+        MetricsServer metrics_server_;
     };
 
 }

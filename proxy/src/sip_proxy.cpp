@@ -5,6 +5,7 @@
 #include "proxy/sip_proxy.hpp"
 #include "common/logger.hpp"
 #include "proxy/sip_parser.hpp"
+#include "../../metrics/include/metrics_coollector.hpp"
 
 #include <unordered_set>
 
@@ -32,6 +33,7 @@ namespace proxy {
 
         common::Logger::instance("sip_proxy.log")
             .log("PROXY", "-", "START", "Proxy starting");
+        metrics_server_.start(8080);
 
         dispatcher_.start();
 
@@ -57,6 +59,7 @@ namespace proxy {
         common::Logger::instance().log(
             "PROXY", "-", "STOP", "Proxy shutting down");
 
+        metrics_server_.stop();
         transport_.stop();
         dispatcher_.stop();
         thread_pool_.shutdown();
@@ -121,6 +124,8 @@ namespace proxy {
         // Parse SIP message
         common::SIPMessage message = SIPParser::parse(pkt.data);
 
+        MetricsCollector::instance().inc_messages_received();
+
         common::Logger::instance().log(
             common::LogLevel::INFO,
             "NETWORK",
@@ -169,6 +174,8 @@ namespace proxy {
                 pkt.ip,
                 pkt.port);
 
+                MetricsCollector::instance().inc_messages_sent();
+
             common::Logger::instance().log(
                 "NETWORK",
                 result.response.get_header("Call-ID"),
@@ -201,6 +208,7 @@ namespace proxy {
                     ip,
                     port);
 
+                MetricsCollector::instance().inc_messages_sent();
                 common::Logger::instance().log(
                     "NETWORK",
                     result.message.get_header("Call-ID"),
@@ -221,6 +229,7 @@ namespace proxy {
                     result.ip,
                     result.port);
 
+                MetricsCollector::instance().inc_messages_sent();
                 common::Logger::instance().log(
                     "NETWORK",
                     result.message.get_header("Call-ID"),
@@ -244,6 +253,7 @@ namespace proxy {
                 result.ip,
                 result.port);
 
+                MetricsCollector::instance().inc_messages_sent();
             common::Logger::instance().log(
                 "NETWORK",
                 result.message.get_header("Call-ID"),

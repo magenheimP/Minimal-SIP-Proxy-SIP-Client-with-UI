@@ -5,6 +5,7 @@
 #include "../include/proxy/register_handler.hpp"
 #include "../include/proxy/registration_table.hpp"
 #include "../../common/include/common/logger.hpp"
+#include "../../metrics/include/metrics_coollector.hpp"
 
 #include <iostream>
 
@@ -110,6 +111,7 @@ common::SIPMessage RegisterHandler::handle(const common::SIPMessage& message) co
         return make_response("SIP/2.0 400 Bad Request", message);
     }
 
+    MetricsCollector::instance().inc_registered_users();
     table_.register_user(user_identity, contact);
 
     common::Logger::instance("proxy.log").log(
