@@ -114,7 +114,6 @@ MainWindow::MainWindow(SIPClient& client, QWidget* parent)
     connect(hangup_btn_,   &QPushButton::clicked, this, &MainWindow::on_hangup_clicked);
     connect(answer_btn_,   &QPushButton::clicked, this, &MainWindow::on_answer_clicked);
     connect(reject_btn_,   &QPushButton::clicked, this, &MainWindow::on_reject_clicked);
-    // connect in constructor
     connect(header_injection_, &HeaderInjectionWidget::stateChanged,
             this, &MainWindow::on_headers_changed);
 
@@ -223,9 +222,19 @@ void MainWindow::on_call_clicked()
         inject ? header_injection_->headersFor("ACK").toStdString() : "");
 
     client_.do_invite(from_user, from_domain, to_user, to_domain);
+}
 
-    client_.do_invite(from_user, from_domain, to_user, to_domain);
+void MainWindow::on_call_error(int code, const QString& reason)
+{
+    const QString msg = QString("Call failed %1: %2").arg(code).arg(reason);
+    status_label_->setText("✗ " + msg);
+    update_button_states();
 
+
+    if (code == 404  || code == 486) {
+        QMessageBox::warning(this, "Call Failed",
+            code == 404 ? "User does not exist." : "User is busy.");
+    }
 }
 
 void MainWindow::on_hangup_clicked()

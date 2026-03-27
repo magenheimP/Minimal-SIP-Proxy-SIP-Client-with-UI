@@ -23,6 +23,7 @@ public slots:
                                const QString& call_id,
                                const QString& remote_uri);
     void on_incoming_call(const QString& call_id, const QString& caller);
+    void on_call_error(int code, const QString& reason);
 
 protected:
     void resizeEvent(QResizeEvent* event) override;

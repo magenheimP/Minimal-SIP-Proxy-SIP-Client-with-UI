@@ -96,6 +96,9 @@ common::Logger& SIPClient::logger()
     return logger_;
 }
 
+void SIPClient::set_call_error_callback(ErrorCallback cb) {
+    call_error_cb_ = std::move(cb);
+}
 
 void SIPClient::on_packet_received(const std::string& data,
                                     const std::string& sender_ip,
@@ -112,6 +115,15 @@ void SIPClient::on_packet_received(const std::string& data,
     receiver_.handle_receive(data);
     invite_handler_.on_message(data);
 
+    if (call_error_cb_) {
+        if (data.rfind("SIP/2.0 4", 0) == 0) {
+            const auto line_end = data.find("\r\n");
+            const std::string first_line = data.substr(0, line_end);
+            const int code = std::stoi(first_line.substr(8, 3));
+            const std::string reason = first_line.substr(12);
+            call_error_cb_(code, reason);
+        }
+    }
     if (call_state_cb_) {
         call_state_cb_(
             SIPClientStateManager::state_name(state_.get_state()),
