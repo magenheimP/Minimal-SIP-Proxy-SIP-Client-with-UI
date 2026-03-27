@@ -201,7 +201,6 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
                    sender_port);
 
     session->on_request(message);
-
     MetricsCollector::instance().inc_active_calls();
     common::Logger::instance().log(
         "SIPRouter",
@@ -391,6 +390,24 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
             call_id,
             "CALL_REMOVED",
             "Removed call context and session after 200 OK to BYE"
+        );
+    }
+    if (status_code == 603 && cseq.find("INVITE") != std::string::npos) {
+        registry_.remove_call(call_id);
+        MetricsCollector::instance().dec_active_calls();
+
+
+        // Acquire lock before erasing from the shared call_contexts_ map
+        {
+            std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+            call_contexts_.erase(call_id);
+        }
+
+        common::Logger::instance().log(
+            "SIPRouter",
+            call_id,
+            "CALL_REMOVED",
+            "Removed call context and session after 603 decline to INVITE"
         );
     }
 

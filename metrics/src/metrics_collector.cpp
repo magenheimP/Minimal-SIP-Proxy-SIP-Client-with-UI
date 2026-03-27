@@ -38,17 +38,17 @@ void MetricsCollector::dec_registered_users() {
 std::string MetricsCollector::to_string() const {
     std::string output;
 
-    output += "# TYPE sip_messages_received counter\n";
-    output += "sip_messages_received " + std::to_string(messages_received.load()) + "\n";
+    output += "SIP_messages_received counter\n";
+    output += "SIP_messages_received " + std::to_string(messages_received.load()) + "\n";
 
-    output += "# TYPE sip_messages_sent counter\n";
-    output += "sip_messages_sent " + std::to_string(messages_sent.load()) + "\n";
+    output += "SIP_messages_sent counter\n";
+    output += "SIP_messages_sent " + std::to_string(messages_sent.load()) + "\n";
 
-    output += "# TYPE sip_active_calls gauge\n";
-    output += "sip_active_calls " + std::to_string(active_calls.load()) + "\n";
+    output += "SIP_active_calls gauge\n";
+    output += "SIP_active_calls " + std::to_string(active_calls.load()) + "\n";
 
-    output += "# TYPE sip_registered_users gauge\n";
-    output += "sip_registered_users " + std::to_string(registered_users.load()) + "\n";
+    output += "SIP_registered_users gauge\n";
+    output += "SIP_registered_users " + std::to_string(registered_users.load()) + "\n";
 
     return output;
 }
