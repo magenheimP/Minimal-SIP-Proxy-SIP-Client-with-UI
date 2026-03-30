@@ -3,11 +3,14 @@
 #include <stdexcept>
 #include <cstdlib>
 
-SIPClient::SIPClient(const std::string& server_ip, int server_port)
+SIPClient::SIPClient(const std::string& server_ip, int server_port,
+                     bool use_tcp)
     : server_ip_(server_ip)
     , server_port_(server_port)
+    , use_tcp_(use_tcp)
     , logger_(common::Logger::instance())
     , transport_()
+    , tcp_transport_()
     , factory_(server_ip, server_port)
     , receiver_()
     , state_()
@@ -25,7 +28,12 @@ void SIPClient::run()
 
 void SIPClient::send_to_server(const std::string& message)
 {
-    transport_.send(message, server_ip_, static_cast<uint16_t>(server_port_));
+    if (use_tcp_)
+        tcp_transport_.send(message, server_ip_,
+                            static_cast<uint16_t>(server_port_));
+    else
+        transport_.send(message, server_ip_,
+                        static_cast<uint16_t>(server_port_));
 }
 
 bool SIPClient::wait_for_register_response(int timeout_seconds)
@@ -76,7 +84,6 @@ void SIPClient::do_invite(const std::string& from_user,
                            const std::string& to_user,
                            const std::string& to_domain)
 {
-
     invite_handler_.handle_invite(from_user, from_domain, to_user, to_domain);
 }
 
@@ -86,19 +93,13 @@ void SIPClient::do_bye(const std::string& extra_headers)
     invite_handler_.handle_bye();
 }
 
-SIPClientStateManager& SIPClient::state()
-{
-    return state_;
-}
-
-common::Logger& SIPClient::logger()
-{
-    return logger_;
-}
-
 void SIPClient::set_call_error_callback(ErrorCallback cb) {
     call_error_cb_ = std::move(cb);
 }
+
+SIPClientStateManager& SIPClient::state()  { return state_; }
+common::Logger&        SIPClient::logger() { return logger_; }
+SIPMessageFactory&     SIPClient::factory(){ return factory_; }
 
 void SIPClient::on_packet_received(const std::string& data,
                                     const std::string& sender_ip,
@@ -139,7 +140,8 @@ void SIPClient::on_packet_received(const std::string& data,
     }
 }
 
-void SIPClient::notify_call_state_changed() {
+void SIPClient::notify_call_state_changed()
+{
     if (call_state_cb_) {
         call_state_cb_(
             SIPClientStateManager::state_name(state_.get_state()),
@@ -148,27 +150,40 @@ void SIPClient::notify_call_state_changed() {
         );
     }
 }
-void SIPClient::start_transport() {
-    transport_.start(
-        0,
-        [this](const std::string& data,
-               const std::string& sender_ip,
-               uint16_t           sender_port)
-        {
-            on_packet_received(data, sender_ip, sender_port);
-        }
-    );
 
-    factory_.set_local_port(transport_.local_port());
+void SIPClient::start_transport()
+{
+    auto on_packet = [this](const std::string& data,
+                             const std::string& sender_ip,
+                             uint16_t           sender_port)
+    {
+        on_packet_received(data, sender_ip, sender_port);
+    };
 
-    logger_.log("NETWORK", "-", "READY",
-        "UDP transport started on port "
-        + std::to_string(transport_.local_port()));
+    if (use_tcp_) {
+        tcp_transport_.connect(server_ip_,
+                               static_cast<uint16_t>(server_port_),
+                               on_packet);
+
+        factory_.set_transport_protocol("TCP");
+        factory_.set_local_port(tcp_transport_.local_port());
+
+        logger_.log("NETWORK", "-", "READY",
+            "TCP transport connected to "
+            + server_ip_ + ":" + std::to_string(server_port_));
+    } else {
+        transport_.start(0, on_packet);
+
+        factory_.set_local_port(transport_.local_port());
+
+        logger_.log("NETWORK", "-", "READY",
+            "UDP transport started on port "
+            + std::to_string(transport_.local_port()));
+    }
 }
 
 void SIPClient::set_register_response_callback(ResponseCallback cb) {
     register_response_cb_ = std::move(cb);
-
 }
 
 void SIPClient::set_call_state_callback(StateCallback cb) {
@@ -179,19 +194,20 @@ void SIPClient::set_incoming_call_callback(
     std::function<void(const std::string&, const std::string&)> cb) {
     incoming_call_cb_ = std::move(cb);
 }
+
 const std::string& SIPClient::local_ip() const { return server_ip_; }
-SIPMessageFactory& SIPClient::factory()         { return factory_; }
 
-void SIPClient::do_answer() {
-    invite_handler_.handle_answer();
-}
+void SIPClient::do_answer() { invite_handler_.handle_answer(); }
+void SIPClient::do_reject() { invite_handler_.handle_reject(); }
 
-void SIPClient::do_reject() {
-    invite_handler_.handle_reject();
-}
 SIPClient::~SIPClient()
 {
-    transport_.stop();
-    logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    if (use_tcp_) {
+        tcp_transport_.stop();
+        logger_.log("NETWORK", "-", "STOP", "TCP transport stopped");
+    } else {
+        transport_.stop();
+        logger_.log("NETWORK", "-", "STOP", "UDP transport stopped");
+    }
     logger_.log("CLIENT", "-", "EXIT", "Program terminated");
 }
