@@ -9,7 +9,7 @@ add_library(networking
         src/tcp_socket.cpp
         include/networking/tcp_socket.hpp
         include/networking/tcp_transport.hpp
-        include/networking/tcp_transport.cpp
+        src/tcp_transport.cpp
 )
 
 target_include_directories(networking
