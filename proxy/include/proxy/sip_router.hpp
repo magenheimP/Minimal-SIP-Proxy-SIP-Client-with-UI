@@ -13,6 +13,7 @@
 #include "../include/proxy/register_handler.hpp"
 #include "../include/proxy/registration_table.hpp"
 #include "../include/proxy/call_registry.hpp"
+#include "../../common/include/common/types.hpp"
 
 namespace proxy {
 
@@ -36,6 +37,8 @@ namespace proxy {
         uint16_t port = 0;
 
         std::string user;
+
+        common::TransportType callee_transport = common::TransportType::UDP;
     };
 
     struct CallContext {
@@ -48,6 +51,8 @@ namespace proxy {
         uint16_t callee_port = 0;
         std::unordered_map<std::string, std::string> caller_stored_headers;
         std::unordered_map<std::string, std::string> callee_stored_headers;
+        common::TransportType caller_transport = common::TransportType::UDP;
+        common::TransportType callee_transport = common::TransportType::UDP;
     };
 
     class SIPRouter {
@@ -56,7 +61,8 @@ namespace proxy {
 
         RoutingResult route(const common::SIPMessage& message,
                             const std::string& sender_ip,
-                            uint16_t sender_port);
+                            uint16_t sender_port,
+                            common::TransportType transport = common::TransportType::UDP);
 
         std::optional<CallContext> get_call_context(const std::string& call_id) const;
 
@@ -65,8 +71,14 @@ namespace proxy {
         }
 
     private:
-        RoutingResult handle_register(const common::SIPMessage& message);
-        RoutingResult handle_invite(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port);
+        RoutingResult handle_register(const common::SIPMessage& message,
+                                      common::TransportType transport);
+
+        RoutingResult handle_invite(const common::SIPMessage& message,
+                                    const std::string& sender_ip,
+                                    uint16_t sender_port,
+                                    common::TransportType transport);
+
         RoutingResult handle_ack(const common::SIPMessage& message);
         RoutingResult handle_bye(const common::SIPMessage& message);
         RoutingResult handle_response(const common::SIPMessage& message);
@@ -87,7 +99,9 @@ namespace proxy {
                                 const std::string& callee,
                                 const std::string& callee_contact,
                                 const std::string& caller_ip,
-                                uint16_t caller_port);
+                                uint16_t caller_port,
+                                common::TransportType caller_transport,
+                                common::TransportType callee_transport);
 
         static void strip_proxy_via(common::SIPMessage& message);
 

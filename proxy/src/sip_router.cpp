@@ -12,7 +12,10 @@ SIPRouter::SIPRouter(RegistrationTable& table)
     : table_(table),
       handler_(table) {}
 
-    RoutingResult SIPRouter::route(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port) {
+RoutingResult SIPRouter::route(const common::SIPMessage& message,
+                                const std::string& sender_ip,
+                                uint16_t sender_port,
+                                common::TransportType transport) {
     const std::string call_id = message.get_header("Call-ID");
 
     common::Logger::instance().log(
@@ -36,11 +39,11 @@ SIPRouter::SIPRouter(RegistrationTable& table)
     const std::string method = message.get_method();
 
     if (method == "REGISTER") {
-        return handle_register(message);
+        return handle_register(message, transport);
     }
 
     if (method == "INVITE") {
-        return handle_invite(message, sender_ip, sender_port);
+        return handle_invite(message, sender_ip, sender_port, transport);
     }
 
     if (method == "ACK") {
@@ -65,7 +68,8 @@ SIPRouter::SIPRouter(RegistrationTable& table)
     return result;
 }
 
-RoutingResult SIPRouter::handle_register(const common::SIPMessage& message) {
+RoutingResult SIPRouter::handle_register(const common::SIPMessage& message,
+                                          common::TransportType transport) {
     const std::string call_id = message.get_header("Call-ID");
 
     if (!has_required_register_headers(message)) {
@@ -91,14 +95,14 @@ RoutingResult SIPRouter::handle_register(const common::SIPMessage& message) {
 
     RoutingResult result;
     result.action = RoutingAction::RespondLocally;
-    result.response = handler_.handle(message);
-
+    result.response = handler_.handle(message, transport);
     return result;
 }
 
 RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
                                         const std::string& sender_ip,
-                                        uint16_t sender_port) {
+                                        uint16_t sender_port,
+                                        common::TransportType transport) {
     const std::string call_id = message.get_header("Call-ID");
 
     if (!has_required_invite_headers(message)) {
@@ -116,11 +120,8 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
         return result;
     }
 
-    const std::string from = message.get_header("From");
-    const std::string to = message.get_header("To");
-
-    const std::string caller = extract_sip_identity(from);
-    const std::string callee = extract_sip_identity(to);
+    const std::string caller = extract_sip_identity(message.get_header("From"));
+    const std::string callee = extract_sip_identity(message.get_header("To"));
 
     if (caller.empty() || callee.empty()) {
         common::Logger::instance().log(
@@ -136,6 +137,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
         return result;
     }
+
     if (caller == callee) {
         common::Logger::instance().log(
             "SIPRouter",
@@ -143,21 +145,23 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
             "INVALID_CALL",
             "Caller cannot call itself: " + caller
         );
+
         RoutingResult result;
         result.action = RoutingAction::RespondLocally;
         result.response = make_error_response("SIP/2.0 400 Bad Request", message);
         result.user = caller;
         return result;
     }
+
     common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "INVITE_LOOKUP",
         "Looking up callee = " + callee);
 
-    const auto callee_contact = table_.get_contact(callee);
+    const auto callee_entry = table_.get_contact_entry(callee);
 
-    if (!callee_contact) {
+    if (!callee_entry) {
         common::Logger::instance().log(
             "SIPRouter",
             call_id,
@@ -195,9 +199,11 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     store_call_context(message,
                    caller,
                    callee,
-                   *callee_contact,
+                   callee_entry->contact,
                    sender_ip,
-                   sender_port);
+                   sender_port,
+                   transport,
+                   callee_entry->transport);
 
     session->on_request(message);
 
@@ -205,13 +211,14 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
         "SIPRouter",
         call_id,
         "FORWARD_REQUEST",
-        "Forwarding INVITE to callee = " + callee + " contact = " + *callee_contact);
+        "Forwarding INVITE to callee = " + callee + " contact = " + callee_entry->contact);
 
     RoutingResult result;
     result.action = RoutingAction::ForwardRequest;
     result.message = forwarded_message;
-    result.contact = *callee_contact;
+    result.contact = callee_entry->contact;
     result.user = callee;
+    result.callee_transport = callee_entry->transport;
 
     return result;
 }
@@ -269,9 +276,11 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
 
     if (sender == context->caller) {
         result.contact = destination_contact;
+        result.callee_transport = context->callee_transport;
     } else {
         result.ip = context->caller_ip;
         result.port = context->caller_port;
+        result.callee_transport = context->caller_transport;
     }
 
     return result;
@@ -330,9 +339,11 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
 
     if (sender == context->caller) {
         result.contact = destination_contact;
+        result.callee_transport = context->callee_transport;
     } else {
         result.ip = context->caller_ip;
         result.port = context->caller_port;
+        result.callee_transport = context->caller_transport;
     }
 
     return result;
@@ -393,8 +404,9 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
     }
 
     const std::string top_via = forwarded_message.get_header("Via");
+    const std::string caller_via_token = context->caller_ip + ":" + std::to_string(context->caller_port);
     const bool response_from_caller = !context->caller_ip.empty() &&
-                                      top_via.find(context->caller_ip) != std::string::npos;
+                                      top_via.find(caller_via_token) != std::string::npos;
 
     std::string dest_ip;
     uint16_t dest_port;
@@ -516,7 +528,9 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
                                    const std::string& callee,
                                    const std::string& callee_contact,
                                    const std::string& caller_ip,
-                                   uint16_t caller_port) {
+                                   uint16_t caller_port,
+                                   common::TransportType caller_transport,
+                                   common::TransportType callee_transport) {
 
     const std::string call_id = message.get_header("Call-ID");
 
@@ -528,6 +542,9 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
     context.caller_port = caller_port;
 
     context.callee_contact = callee_contact;
+
+    context.caller_transport = caller_transport;
+    context.callee_transport = callee_transport;
 
     const auto pos_at = callee_contact.find('@');
     const auto pos_colon = callee_contact.find(':', pos_at);
