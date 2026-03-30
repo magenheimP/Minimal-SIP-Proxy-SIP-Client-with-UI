@@ -18,6 +18,8 @@
 #include <cstdint>
 
 class TcpTransport : public IUdpTransport {
+
+public:
     TcpTransport();
     ~TcpTransport();
 
