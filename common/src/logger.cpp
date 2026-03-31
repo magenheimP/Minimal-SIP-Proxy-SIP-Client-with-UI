@@ -128,6 +128,15 @@ namespace common {
         }
     }
 
+    void Logger::separator()
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (m_file.is_open()) {
+            m_file << std::endl;
+            m_file.flush();
+        }
+    }
+
     std::string Logger::timestamp()
     {
         auto now = std::chrono::system_clock::now();

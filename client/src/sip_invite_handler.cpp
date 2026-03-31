@@ -31,9 +31,11 @@ void SIPInviteHandler::handle_invite(const std::string& from_user,
 
     state.on_calling(call_id, remote_uri);
 
+    const std::string extra = client_.pending_headers("INVITE");
     const std::string msg =
         client_.factory().build_invite(from_user, from_domain,
-                                        to_user,   to_domain, call_id);
+                                        to_user,   to_domain,
+                                        call_id,   extra);
 
     client_.logger().log("CALL", call_id, "INVITE_SENT", remote_uri);
     client_.send_to_server(msg);
@@ -62,12 +64,18 @@ void SIPInviteHandler::handle_bye()
 
     auto [to_user, to_domain] = split_sip_uri(remote_uri);
 
+    const std::string extra = client_.pending_headers("BYE");
     const std::string msg =
         client_.factory().build_bye(from_user, from_domain,
-                                     to_user,   to_domain, call_id);
+                                     to_user,   to_domain,
+                                     call_id,   extra);
 
     client_.logger().log("CALL", call_id, "BYE_SENT", remote_uri);
     client_.send_to_server(msg);
+
+    state.on_call_terminated();
+    client_.logger().log("CALL", call_id, "CALL_TERMINATED", "local BYE sent");
+
     std::cout << "BYE sent  [call-id: " << call_id << "]\n";
     client_.notify_call_state_changed();
 }
@@ -78,12 +86,15 @@ void SIPInviteHandler::on_message(const std::string& raw)
     std::string upper = raw;
     std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
 
-    if (upper.rfind("INVITE", 0) != std::string::npos) {
+
+    const bool is_response = upper.rfind("SIP/2.0", 0) != std::string::npos;
+
+    if (!is_response && upper.rfind("INVITE", 0) != std::string::npos) {
         handle_incoming_invite(raw);
         return;
     }
 
-    if (upper.rfind("BYE", 0) != std::string::npos) {
+    if (!is_response && upper.rfind("BYE", 0) != std::string::npos) {
         handle_incoming_bye(raw);
         return;
     }
@@ -137,11 +148,15 @@ void SIPInviteHandler::handle_incoming_invite(const std::string& raw)
     client_.state().on_incoming_call(call_id, remote_uri);
     client_.notify_call_state_changed();
 
-    const std::string trying = client_.factory().build_response(100, "Trying", raw);
+    const std::string trying = client_.factory().build_response(
+    100, "Trying", raw,
+    client_.pending_headers("100"));
     client_.send_to_server(trying);
     client_.logger().log("CALL", call_id, "100_TRYING_SENT", caller);
 
-    const std::string ringing = client_.factory().build_response(180, "Ringing", raw);
+    const std::string ringing = client_.factory().build_response(
+        180, "Ringing", raw,
+        client_.pending_headers("180"));
     client_.send_to_server(ringing);
     client_.logger().log("CALL", call_id, "180_RINGING_SENT", caller);
 
@@ -159,12 +174,15 @@ void SIPInviteHandler::handle_incoming_bye(const std::string& raw)
     if (call_id.empty()) return;
     if (call_id != client_.state().active_call_id()) return;
 
-    const std::string ok = client_.factory().build_response(200, "OK", raw);
+    const std::string ok = client_.factory().build_response(
+    200, "OK", raw,
+    client_.pending_headers("200"));
     client_.send_to_server(ok);
 
     client_.state().on_call_terminated();
     client_.logger().log("CALL", call_id, "CALL_TERMINATED", "remote BYE");
     std::cout << "\n[" << call_id << "] Remote party hung up.\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_answer()
@@ -175,7 +193,9 @@ void SIPInviteHandler::handle_answer()
     }
 
     const std::string call_id = extract_call_id(pending_invite_);
-    const std::string ok = client_.factory().build_response(200, "OK", pending_invite_);
+    const std::string ok = client_.factory().build_response(
+       200, "OK", pending_invite_,
+       client_.pending_headers("200"));
     client_.send_to_server(ok);
 
     client_.state().on_call_established();
@@ -212,6 +232,7 @@ void SIPInviteHandler::handle_100()
 
     client_.logger().log("CALL", call_id, "100_TRYING", "");
     std::cout << "[" << call_id << "] 100 Trying\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_180()
@@ -220,6 +241,7 @@ void SIPInviteHandler::handle_180()
     client_.state().on_ringing();
     client_.logger().log("CALL", call_id, "180_RINGING", "");
     std::cout << "[" << call_id << "] 180 Ringing...\n> " << std::flush;
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_200_ok_invite()
@@ -239,10 +261,13 @@ void SIPInviteHandler::handle_200_ok_invite()
     const std::string from_domain = local.substr(at + 1);
     auto [to_user, to_domain] = split_sip_uri(remote_uri);
 
+    const std::string extra = client_.pending_headers("ACK");
     const std::string ack =
         client_.factory().build_ack(from_user, from_domain,
-                                     to_user,   to_domain, call_id);
+                                     to_user,   to_domain,
+                                     call_id,   extra);
     client_.send_to_server(ack);
+    client_.notify_call_state_changed();
 }
 
 void SIPInviteHandler::handle_200_ok_bye()
@@ -328,4 +353,5 @@ void SIPInviteHandler::handle_error(int code, const std::string& raw)
     std::cout << "[" << call_id << "] Call failed: " << reason << "\n> " << std::flush;
 
     state.on_call_terminated();
+    client_.notify_call_state_changed();
 }

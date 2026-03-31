@@ -44,6 +44,7 @@ namespace common {
          const std::string& component,
          const std::string& call_id,
          const common::SIPMessage& sip_message);
+        void separator();
 
     private:
 

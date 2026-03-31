@@ -5,19 +5,23 @@
 #include <regex>
 #include <unordered_map>
 #include <stdexcept>
+#include <chrono>
+#include <random>
 
 SIPMessageFactory::SIPMessageFactory(const std::string& local_ip, int local_port)
     : local_ip_(local_ip)
     , local_port_(local_port)
     , cseq_(1)
+    , rng_(std::chrono::steady_clock::now().time_since_epoch().count())
 {
-    std::srand(static_cast<unsigned>(std::time(nullptr)));
-    register_call_id_ = std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+    std::uniform_int_distribution<uint64_t> dist;
+    register_call_id_ = std::to_string(dist(rng_)) + "@" + local_ip_;
 }
 
 std::string SIPMessageFactory::new_call_id() const
 {
-    return std::to_string(std::rand() % 1000000) + "@" + local_ip_;
+    std::uniform_int_distribution<uint64_t> dist;
+    return std::to_string(dist(rng_)) + "@" + local_ip_;
 }
 
 void SIPMessageFactory::set_local_port(uint16_t port)
@@ -31,7 +35,8 @@ std::string SIPMessageFactory::build(const std::string& method,
                                      const std::string& to_username,
                                      const std::string& to_domain,
                                      const std::string& call_id,
-                                     const std::string& body)
+                                     const std::string& body,
+                                     const std::string& extra_headers)
 {
     if (method.empty())
         throw std::invalid_argument("SIP method must not be empty");
@@ -52,10 +57,43 @@ std::string SIPMessageFactory::build(const std::string& method,
     if (is_register || method == "INVITE")
         msg.add_header("Contact", "<sip:" + from_username + "@" + local_ip_
                                   + ":" + std::to_string(local_port_) + ">");
-    msg.add_header("Content-Length", body.empty() ? "0" : std::to_string(body.size()));
 
-    if (!body.empty())
-        msg.body = body;
+    if (!extra_headers.empty()) {
+        std::istringstream ss(extra_headers);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (!line.empty() && line.back() == '\r')
+                line.pop_back();
+            if (line.empty()) continue;
+            const auto colon = line.find(':');
+            if (colon == std::string::npos) continue;
+
+            std::string name  = line.substr(0, colon);
+            std::string value = line.substr(colon + 1);
+
+
+            const auto vstart = value.find_first_not_of(' ');
+            if (vstart != std::string::npos) value = value.substr(vstart);
+
+
+            const auto it = std::find_if(msg.headers.begin(), msg.headers.end(),
+                [&](const common::SIPHeader& h) {
+                    return h.name.size() == name.size()
+                        && std::equal(h.name.begin(), h.name.end(),
+                                      name.begin(), [](char a, char b) {
+                                          return std::tolower(a) == std::tolower(b);
+                                      });
+                });
+
+            if (it != msg.headers.end())
+                it->value = value;
+            else
+                msg.add_header(name, value);
+        }
+    }
+
+    msg.add_header("Content-Length", body.empty() ? "0" : std::to_string(body.size()));
+    if (!body.empty()) msg.body = body;
 
     return serialize(msg);
 }
@@ -76,28 +114,44 @@ std::string SIPMessageFactory::serialize(const common::SIPMessage& msg) const
 }
 
 std::string SIPMessageFactory::build_register(const std::string& username,
-                                               const std::string& domain)
+                                               const std::string& domain,
+                                               const std::string& extra_headers)
 {
-    return build("REGISTER", username, domain, username, domain);
+    return build("REGISTER", username, domain, username, domain,
+                 {}, {}, extra_headers);
 }
 
 std::string SIPMessageFactory::build_invite(const std::string& from_user,
                                              const std::string& from_domain,
                                              const std::string& to_user,
                                              const std::string& to_domain,
-                                             const std::string& call_id)
+                                             const std::string& call_id,
+                                             const std::string& extra_headers)
 {
-    return build("INVITE", from_user, from_domain, to_user, to_domain, call_id);
+    return build("INVITE", from_user, from_domain, to_user, to_domain,
+                 call_id, {}, extra_headers);
 }
-
 
 std::string SIPMessageFactory::build_ack(const std::string& from_user,
                                           const std::string& from_domain,
                                           const std::string& to_user,
                                           const std::string& to_domain,
-                                          const std::string& call_id)
+                                          const std::string& call_id,
+                                          const std::string& extra_headers)
 {
-    return build("ACK", from_user, from_domain, to_user, to_domain, call_id);
+    return build("ACK", from_user, from_domain, to_user, to_domain,
+                 call_id, {}, extra_headers);
+}
+
+std::string SIPMessageFactory::build_bye(const std::string& from_user,
+                                          const std::string& from_domain,
+                                          const std::string& to_user,
+                                          const std::string& to_domain,
+                                          const std::string& call_id,
+                                          const std::string& extra_headers)
+{
+    return build("BYE", from_user, from_domain, to_user, to_domain,
+                 call_id, {}, extra_headers);
 }
 
 
@@ -131,18 +185,12 @@ std::string SIPMessageFactory::build_ack_for_error(const std::string& from_user,
     return serialize(msg);
 }
 
-std::string SIPMessageFactory::build_bye(const std::string& from_user,
-                                          const std::string& from_domain,
-                                          const std::string& to_user,
-                                          const std::string& to_domain,
-                                          const std::string& call_id)
-{
-    return build("BYE", from_user, from_domain, to_user, to_domain, call_id);
-}
+
 
 std::string SIPMessageFactory::build_response(int code,
                                                const std::string& reason,
-                                               const std::string& request_raw)
+                                               const std::string& request_raw ,
+                                               const std::string& extra_headers)
 {
     auto get_header = [&](const std::string& name) -> std::string {
         std::regex re(name + R"(\s*:\s*(.+))", std::regex::icase);
@@ -154,11 +202,21 @@ std::string SIPMessageFactory::build_response(int code,
 
     std::ostringstream oss;
     oss << "SIP/2.0 " << code << " " << reason << "\r\n";
-    oss << "Via: "         << get_header("Via")     << "\r\n";
-    oss << "From: "        << get_header("From")    << "\r\n";
-    oss << "To: "          << get_header("To")      << "\r\n";
-    oss << "Call-ID: "     << get_header("Call-ID") << "\r\n";
-    oss << "CSeq: "        << get_header("CSeq")    << "\r\n";
+    oss << "Via: "     << get_header("Via")     << "\r\n";
+    oss << "From: "    << get_header("From")    << "\r\n";
+    oss << "To: "      << get_header("To")      << "\r\n";
+    oss << "Call-ID: " << get_header("Call-ID") << "\r\n";
+    oss << "CSeq: "    << get_header("CSeq")    << "\r\n";
+
+    if (!extra_headers.empty()) {
+        std::istringstream ss(extra_headers);
+        std::string line;
+        while (std::getline(ss, line)) {
+            if (!line.empty() && line.back() == '\r') line.pop_back();
+            if (!line.empty()) oss << line << "\r\n";
+        }
+    }
+
     oss << "Content-Length: 0\r\n\r\n";
     return oss.str();
 }

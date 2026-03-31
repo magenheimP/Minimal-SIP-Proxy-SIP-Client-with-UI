@@ -2,15 +2,18 @@
 // Created by lazarstani on 3/17/26.
 //
 
-
-
-
 #include "proxy/sip_proxy.hpp"
-
 #include "common/logger.hpp"
 #include "proxy/sip_parser.hpp"
 
+#include <unordered_set>
+
 namespace proxy {
+
+    static const std::unordered_set<std::string> STANDARD_SIP_HEADERS = {
+        "Via", "From", "To", "Call-ID", "CSeq",
+        "Contact", "Content-Length", "Content-Type"
+    };
 
     SIPProxy::SIPProxy(size_t worker_threads)
         : thread_pool_(worker_threads),
@@ -59,6 +62,54 @@ namespace proxy {
         thread_pool_.shutdown();
     }
 
+    void SIPProxy::log_custom_headers(const common::SIPMessage& message)
+    {
+        const std::string call_id = message.get_header("Call-ID");
+
+        for (const auto& header : message.headers) {
+            if (STANDARD_SIP_HEADERS.find(header.name) == STANDARD_SIP_HEADERS.end()) {
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "CUSTOM_HEADER",
+                    header.name + ": " + header.value);
+            }
+        }
+    }
+
+    void SIPProxy::log_modified_headers(const common::SIPMessage& message,
+                                        const CallContext& context)
+    {
+        const std::string call_id = message.get_header("Call-ID");
+        const std::string sender  = message.get_header("From");
+
+        const bool is_caller = sender.find(context.caller) != std::string::npos;
+        const auto& stored   = is_caller
+                               ? context.caller_stored_headers
+                               : context.callee_stored_headers;
+
+        if (!is_caller && stored.empty()) return;
+
+        for (const auto& header : message.headers) {
+            if (STANDARD_SIP_HEADERS.find(header.name) == STANDARD_SIP_HEADERS.end()) {
+                continue;
+            }
+
+            if (header.name == "Via") continue;
+            if (header.name == "CSeq") continue;
+
+            const auto it = stored.find(header.name);
+            if (it != stored.end() && it->second != header.value) {
+                common::Logger::instance().log(
+                    "NETWORK",
+                    call_id,
+                    "HEADER_MODIFIED",
+                    header.name + ": " + header.value +
+                    " (was: " + it->second + ")");
+            }
+        }
+    }
+
     void SIPProxy::handle_packet(const common::RawPacket& pkt)
     {
         common::Logger::instance().log(
@@ -69,6 +120,43 @@ namespace proxy {
 
         // Parse SIP message
         common::SIPMessage message = SIPParser::parse(pkt.data);
+
+        common::Logger::instance().log(
+            common::LogLevel::INFO,
+            "NETWORK",
+            message.get_header("Call-ID"),
+            "SIP_MESSAGE_IN",
+            message);
+
+        log_custom_headers(message);
+
+        const std::string call_id = message.get_header("Call-ID");
+        const auto context = router_.get_call_context(call_id);
+        if (context) {
+            log_modified_headers(message, *context);
+        }
+
+        if (message.is_request() && message.get_method() == "INVITE") {
+            const std::string caller = message.get_header("From");
+            const std::string contact_in_invite = message.get_header("Contact");
+
+            const auto sip_pos = caller.find("sip:");
+            const auto gt_pos  = caller.find('>', sip_pos);
+            if (sip_pos != std::string::npos && !contact_in_invite.empty()) {
+                const std::string caller_identity = caller.substr(sip_pos + 4,
+                    gt_pos != std::string::npos ? gt_pos - sip_pos - 4 : std::string::npos);
+
+                const auto registered_contact = router_.get_registered_contact(caller_identity);
+                if (registered_contact && *registered_contact != contact_in_invite) {
+                    common::Logger::instance().log(
+                        "NETWORK",
+                        call_id,
+                        "HEADER_MODIFIED",
+                        "Contact: " + contact_in_invite +
+                        " (was: " + *registered_contact + ")");
+                }
+            }
+        }
 
         // Route it
         RoutingResult result = router_.route(message, pkt.ip, pkt.port);
@@ -86,6 +174,15 @@ namespace proxy {
                 result.response.get_header("Call-ID"),
                 "SEND",
                 "Local response sent to " + pkt.ip);
+
+            common::Logger::instance().log(
+                common::LogLevel::INFO,
+                "NETWORK",
+                result.response.get_header("Call-ID"),
+                "SIP_MESSAGE_OUT",
+                result.response);
+
+            common::Logger::instance().separator();
             break;
 
         case RoutingAction::ForwardRequest:
@@ -109,6 +206,15 @@ namespace proxy {
                     result.message.get_header("Call-ID"),
                     "FORWARD",
                     "Forwarded request to " + ip + ":" + std::to_string(port));
+
+                common::Logger::instance().log(
+                    common::LogLevel::INFO,
+                    "NETWORK",
+                    result.message.get_header("Call-ID"),
+                    "SIP_MESSAGE_OUT",
+                    result.message);
+
+                common::Logger::instance().separator();
             } else {
                 transport_.send(
                     result.message.serialize(),
@@ -120,6 +226,15 @@ namespace proxy {
                     result.message.get_header("Call-ID"),
                     "FORWARD",
                     "Forwarded request to " + result.ip + ":" + std::to_string(result.port));
+
+                common::Logger::instance().log(
+                    common::LogLevel::INFO,
+                    "NETWORK",
+                    result.message.get_header("Call-ID"),
+                    "SIP_MESSAGE_OUT",
+                    result.message);
+
+                common::Logger::instance().separator();
             }
             break;
 
@@ -134,6 +249,15 @@ namespace proxy {
                 result.message.get_header("Call-ID"),
                 "FORWARD",
                 "Forwarded response to " + result.ip + ":" + std::to_string(result.port));
+
+            common::Logger::instance().log(
+                common::LogLevel::INFO,
+                "NETWORK",
+                result.message.get_header("Call-ID"),
+                "SIP_MESSAGE_OUT",
+                result.message);
+
+            common::Logger::instance().separator();
             break;
 
         case RoutingAction::Ignore:

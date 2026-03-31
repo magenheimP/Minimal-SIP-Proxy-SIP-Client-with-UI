@@ -4,6 +4,7 @@
 
 #include "../include/proxy/sip_router.hpp"
 #include "../../common/include/common/logger.hpp"
+#include <unordered_set>
 
 namespace proxy {
 
@@ -14,19 +15,15 @@ SIPRouter::SIPRouter(RegistrationTable& table)
     RoutingResult SIPRouter::route(const common::SIPMessage& message, const std::string& sender_ip, uint16_t sender_port) {
     const std::string call_id = message.get_header("Call-ID");
 
-    common::Logger::instance("proxy.log").log(
-        "SIPRouter",
-        call_id,
-        "RECEIVED",
-        "Routing SIP message: " + message.start_line
-    );
+    common::Logger::instance().log(
+        common::LogLevel::INFO, "SIPRouter", call_id, "RECEIVED", message);
 
     if (message.is_response()) {
         return handle_response(message);
     }
 
     if (!message.is_request()) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "IGNORED",
@@ -54,7 +51,7 @@ SIPRouter::SIPRouter(RegistrationTable& table)
         return handle_bye(message);
     }
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "NOT_IMPLEMENTED",
@@ -72,7 +69,7 @@ RoutingResult SIPRouter::handle_register(const common::SIPMessage& message) {
     const std::string call_id = message.get_header("Call-ID");
 
     if (!has_required_register_headers(message)) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "BAD_REQUEST",
@@ -85,7 +82,7 @@ RoutingResult SIPRouter::handle_register(const common::SIPMessage& message) {
         return result;
     }
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "REGISTER_DISPATCH",
@@ -105,7 +102,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     const std::string call_id = message.get_header("Call-ID");
 
     if (!has_required_invite_headers(message)) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "BAD_REQUEST",
@@ -126,7 +123,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     const std::string callee = extract_sip_identity(to);
 
     if (caller.empty() || callee.empty()) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "BAD_REQUEST",
@@ -140,7 +137,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
         return result;
     }
     if (caller == callee) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "INVALID_CALL",
@@ -152,7 +149,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
         result.user = caller;
         return result;
     }
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "INVITE_LOOKUP",
@@ -161,7 +158,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     const auto callee_contact = table_.get_contact(callee);
 
     if (!callee_contact) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "NOT_FOUND",
@@ -180,7 +177,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
     auto session = registry_.create_call(call_id, caller, callee);
     if (!session) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "DUPLICATE_INVITE",
@@ -202,9 +199,9 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
                    sender_ip,
                    sender_port);
 
-    session->handle_event(CallEvent::INVITE);
+    session->on_request(message);
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "FORWARD_REQUEST",
@@ -224,7 +221,7 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
 
     const auto context = get_call_context(call_id);
     if (!context) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "CALL_NOT_FOUND",
@@ -256,10 +253,10 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        session->handle_event(CallEvent::ACK);
+        session->on_request(message);
     }
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "FORWARD_REQUEST",
@@ -285,7 +282,7 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
 
     const auto context = get_call_context(call_id);
     if (!context) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "CALL_NOT_FOUND",
@@ -317,10 +314,10 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        session->handle_event(CallEvent::BYE);
+        session->on_request(message);
     }
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "FORWARD_REQUEST",
@@ -346,7 +343,7 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
 
     const auto context = get_call_context(call_id);
     if (!context) {
-        common::Logger::instance("proxy.log").log(
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "CALL_NOT_FOUND",
@@ -365,20 +362,29 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
 
     auto session = registry_.find_call(call_id);
     if (session) {
-        if (status_code == 100) {
-            session->handle_event(CallEvent::TRYING_100);
-        } else if (status_code == 180) {
-            session->handle_event(CallEvent::RINGING_180);
-        } else if (status_code == 200 && cseq.find("INVITE") != std::string::npos) {
-            session->handle_event(CallEvent::OK_200);
+        session->on_response(forwarded_message);
+    }
+
+    if (status_code == 200 && cseq.find("INVITE") != std::string::npos) {
+        std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+        auto it = call_contexts_.find(call_id);
+        if (it != call_contexts_.end()) {
+            for (const auto& header : forwarded_message.headers) {
+                it->second.callee_stored_headers[header.name] = header.value;
+            }
         }
     }
 
     if (status_code == 200 && cseq.find("BYE") != std::string::npos) {
         registry_.remove_call(call_id);
-        call_contexts_.erase(call_id);
 
-        common::Logger::instance("proxy.log").log(
+        // Acquire lock before erasing from the shared call_contexts_ map
+        {
+            std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+            call_contexts_.erase(call_id);
+        }
+
+        common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "CALL_REMOVED",
@@ -386,21 +392,56 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
         );
     }
 
-    common::Logger::instance("proxy.log").log(
+    const std::string top_via = forwarded_message.get_header("Via");
+    const bool response_from_caller = !context->caller_ip.empty() &&
+                                      top_via.find(context->caller_ip) != std::string::npos;
+
+    std::string dest_ip;
+    uint16_t dest_port;
+    std::string dest_user;
+
+    if (response_from_caller && !context->callee_ip.empty()) {
+        // Response came from the caller -> forward it to the callee
+        dest_ip   = context->callee_ip;
+        dest_port = context->callee_port;
+        dest_user = context->callee;
+    } else {
+        // Response came from the callee -> forward it to the caller
+        dest_ip   = context->caller_ip;
+        dest_port = context->caller_port;
+        dest_user = context->caller;
+    }
+
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "FORWARD_RESPONSE",
         "Forwarding SIP response with status = " +
-        std::to_string(status_code) + " to caller = " +
-        context->caller_ip + ":" +
-        std::to_string(context->caller_port));
+        std::to_string(status_code) + " to " + dest_user +
+        " = " + dest_ip + ":" + std::to_string(dest_port));
+
+    static const std::unordered_set<std::string> STANDARD_HEADERS = {
+        "Via", "From", "To", "Call-ID", "CSeq",
+        "Contact", "Content-Length", "Content-Type"
+    };
+
+    const auto& stored = response_from_caller
+                         ? context->callee_stored_headers
+                         : context->caller_stored_headers;
+
+    for (const auto& [name, value] : stored) {
+        if (STANDARD_HEADERS.count(name) == 0 &&
+            !forwarded_message.has_header(name)) {
+            forwarded_message.add_header(name, value);
+        }
+    }
 
     RoutingResult result;
     result.action = RoutingAction::ForwardResponse;
     result.message = forwarded_message;
-    result.ip = context->caller_ip;
-    result.port = context->caller_port;
-    result.user = context->caller;
+    result.ip   = dest_ip;
+    result.port = dest_port;
+    result.user = dest_user;
 
     return result;
 }
@@ -480,7 +521,6 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
     const std::string call_id = message.get_header("Call-ID");
 
     CallContext context;
-    context.call_id = call_id;
     context.caller = caller;
     context.callee = callee;
 
@@ -489,9 +529,27 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
 
     context.callee_contact = callee_contact;
 
+    const auto pos_at = callee_contact.find('@');
+    const auto pos_colon = callee_contact.find(':', pos_at);
+    if (pos_at != std::string::npos && pos_colon != std::string::npos) {
+        context.callee_ip = callee_contact.substr(pos_at + 1, pos_colon - pos_at - 1);
+        context.callee_port = static_cast<uint16_t>(std::stoi(callee_contact.substr(pos_colon + 1)));
+    }
+
+    for (const auto& header : message.headers) {
+        context.caller_stored_headers[header.name] = header.value;
+    }
+
+    const auto callee_registered_contact = table_.get_contact(callee);
+    if (callee_registered_contact) {
+        context.callee_stored_headers["Contact"] = *callee_registered_contact;
+    }
+
+    // Acquire lock before writing to the shared call_contexts_ map
+    std::lock_guard<std::mutex> lock(call_contexts_mutex_);
     call_contexts_[call_id] = context;
 
-    common::Logger::instance("proxy.log").log(
+    common::Logger::instance().log(
         "SIPRouter",
         call_id,
         "CONTEXT_STORED",
@@ -501,6 +559,8 @@ void SIPRouter::store_call_context(const common::SIPMessage& message,
 }
 
 std::optional<CallContext> SIPRouter::get_call_context(const std::string& call_id) const {
+    // Acquire lock before reading from the shared call_contexts_ map
+    std::lock_guard<std::mutex> lock(call_contexts_mutex_);
     auto it = call_contexts_.find(call_id);
     if (it == call_contexts_.end()) {
         return std::nullopt;

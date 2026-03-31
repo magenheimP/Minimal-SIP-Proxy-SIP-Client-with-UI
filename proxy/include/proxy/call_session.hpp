@@ -1,9 +1,11 @@
 #pragma once
 
 #include <string>
+#include <mutex>
 #include "call_state_machine.hpp"
 #include "call_state.hpp"
 #include "common/logger.hpp"
+#include "common/sip_message.hpp"
 
 namespace proxy
 {
@@ -15,12 +17,18 @@ namespace proxy
                     std::string caller,
                     std::string callee);
 
-        void handle_event(CallEvent event);
+
+        void on_request(const common::SIPMessage& message);
+
+
+        void on_response(const common::SIPMessage& message);
 
         CallState state() const;
         const std::string& call_id() const;
 
     private:
+        void apply_event(CallEvent event);
+
         std::string m_call_id;
         std::string m_caller;
         std::string m_callee;
