@@ -175,6 +175,20 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
         return result;
     }
+    if (callee_entry->transport != transport) {
+        common::Logger::instance().log(
+            "SIPRouter",
+            call_id,
+            "WRONG PROTOCOL",
+            "Callee is using different protocol " + callee);
+
+        RoutingResult result;
+        result.action = RoutingAction::RespondLocally;
+        result.response = make_error_response("SIP/2.0 400 Different protocol", message);
+        result.user = callee;
+
+        return result;
+    }
 
     common::SIPMessage forwarded_message = message;
     const uint16_t callee_port = (callee_entry->transport == common::TransportType::TCP)
