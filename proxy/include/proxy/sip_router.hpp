@@ -59,6 +59,11 @@ namespace proxy {
     public:
         explicit SIPRouter(RegistrationTable& table);
 
+        void set_proxy_ports(uint16_t udp_port, uint16_t tcp_port) {
+            proxy_udp_port_ = udp_port;
+            proxy_tcp_port_ = tcp_port;
+        }
+
         RoutingResult route(const common::SIPMessage& message,
                             const std::string& sender_ip,
                             uint16_t sender_port,
@@ -88,7 +93,8 @@ namespace proxy {
 
         static std::string extract_sip_identity(const std::string& header);
 
-        static std::string build_proxy_via();
+        static std::string build_proxy_via(common::TransportType transport = common::TransportType::UDP,
+                                           uint16_t port = 5060);
 
         static common::SIPMessage make_error_response(
             const std::string& status,
@@ -114,6 +120,9 @@ namespace proxy {
         mutable std::mutex call_contexts_mutex_;
 
         std::unordered_map<std::string, CallContext> call_contexts_;
+
+        uint16_t proxy_udp_port_ = 5060;
+        uint16_t proxy_tcp_port_ = 5060;
     };
 
 }
