@@ -29,6 +29,11 @@ void SIPMessageFactory::set_local_port(uint16_t port)
     local_port_ = port;
 }
 
+void SIPMessageFactory::set_transport_protocol(const std::string& protocol)
+{
+    transport_protocol_ = protocol;
+}
+
 std::string SIPMessageFactory::build(const std::string& method,
                                      const std::string& from_username,
                                      const std::string& from_domain,
@@ -71,10 +76,8 @@ std::string SIPMessageFactory::build(const std::string& method,
             std::string name  = line.substr(0, colon);
             std::string value = line.substr(colon + 1);
 
-
             const auto vstart = value.find_first_not_of(' ');
             if (vstart != std::string::npos) value = value.substr(vstart);
-
 
             const auto it = std::find_if(msg.headers.begin(), msg.headers.end(),
                 [&](const common::SIPHeader& h) {
@@ -100,7 +103,8 @@ std::string SIPMessageFactory::build(const std::string& method,
 
 std::string SIPMessageFactory::make_via() const
 {
-    return "SIP/2.0/UDP " + local_ip_ + ":" + std::to_string(local_port_);
+    return "SIP/2.0/" + transport_protocol_
+         + " " + local_ip_ + ":" + std::to_string(local_port_);
 }
 
 std::string SIPMessageFactory::serialize(const common::SIPMessage& msg) const
@@ -154,7 +158,6 @@ std::string SIPMessageFactory::build_bye(const std::string& from_user,
                  call_id, {}, extra_headers);
 }
 
-
 std::string SIPMessageFactory::build_ack_for_error(const std::string& from_user,
                                                     const std::string& from_domain,
                                                     const std::string& to_user,
@@ -162,7 +165,6 @@ std::string SIPMessageFactory::build_ack_for_error(const std::string& from_user,
                                                     const std::string& call_id,
                                                     const std::string& error_response_raw)
 {
-
     std::regex cseq_re(R"(CSeq\s*:\s*(\d+)\s+\w+)", std::regex::icase);
     std::smatch m;
     int cseq_num = 0;
@@ -181,15 +183,12 @@ std::string SIPMessageFactory::build_ack_for_error(const std::string& from_user,
     msg.add_header("CSeq",           std::to_string(cseq_num) + " ACK");
     msg.add_header("Content-Length", "0");
 
-
     return serialize(msg);
 }
 
-
-
 std::string SIPMessageFactory::build_response(int code,
                                                const std::string& reason,
-                                               const std::string& request_raw ,
+                                               const std::string& request_raw,
                                                const std::string& extra_headers)
 {
     auto get_header = [&](const std::string& name) -> std::string {
