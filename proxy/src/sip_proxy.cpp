@@ -8,6 +8,8 @@
 
 #include <unordered_set>
 
+#include "proxy/metrics_collector.hpp"
+
 namespace proxy {
 
     static const std::unordered_set<std::string> STANDARD_SIP_HEADERS = {
@@ -98,6 +100,7 @@ namespace proxy {
             tcp_transport_.send(data, ip, port);
         else
             transport_.send(data, ip, port);
+        MetricsCollector::instance().inc_messages_sent();
     }
 
     void SIPProxy::log_custom_headers(const common::SIPMessage& message)
@@ -150,6 +153,7 @@ namespace proxy {
 
         common::SIPMessage message = SIPParser::parse(pkt.data);
 
+        MetricsCollector::instance().inc_messages_received();
         common::Logger::instance().log(
             common::LogLevel::INFO, "NETWORK",
             message.get_header("Call-ID"), "SIP_MESSAGE_IN", message);

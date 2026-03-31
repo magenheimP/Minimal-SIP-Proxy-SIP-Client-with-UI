@@ -8,6 +8,8 @@
 
 #include <iostream>
 
+#include "proxy/metrics_collector.hpp"
+
 namespace proxy {
 static std::string extract_sip_identity(const std::string& header_value) {
     const std::size_t sip_pos = header_value.find("sip:");
@@ -113,6 +115,7 @@ common::SIPMessage RegisterHandler::handle(const common::SIPMessage& message,
 
     table_.register_user(user_identity, contact, transport);
 
+    MetricsCollector::instance().inc_registered_users();
     common::Logger::instance("proxy.log").log(
       "RegisterHandler",
       call_id,
