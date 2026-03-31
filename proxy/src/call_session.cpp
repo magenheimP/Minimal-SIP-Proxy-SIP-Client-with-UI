@@ -96,5 +96,6 @@ namespace proxy
     {
         return m_call_id;
     }
+    bool CallSession::is_terminated() const { return state() == CallState::TERMINATED; }
 
 }

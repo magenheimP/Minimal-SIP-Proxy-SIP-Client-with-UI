@@ -12,7 +12,11 @@ add_library(proxy
         include/proxy/call_registry.hpp
         src/call_registry.cpp
         include/proxy/sip_proxy.hpp
-        src/sip_proxy.cpp)
+        src/sip_proxy.cpp
+        include/proxy/metrics_collector.hpp
+        src/metrics_collector.cpp
+        include/proxy/metrics_server.hpp
+        src/metrics_server.cpp)
 
 target_include_directories(proxy
         PUBLIC
