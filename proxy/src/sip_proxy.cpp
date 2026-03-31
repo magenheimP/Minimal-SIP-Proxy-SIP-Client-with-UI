@@ -33,6 +33,8 @@ namespace proxy {
         common::Logger::instance("sip_proxy.log")
             .log("PROXY", "-", "START", "Proxy starting");
 
+        router_.set_proxy_ports(udp_port, tcp_port > 0 ? tcp_port : udp_port);
+
         dispatcher_.start();
 
         transport_.start(udp_port,

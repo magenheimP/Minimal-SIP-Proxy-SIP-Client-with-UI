@@ -177,7 +177,9 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
     }
 
     common::SIPMessage forwarded_message = message;
-    forwarded_message.prepend_header("Via", build_proxy_via());
+    const uint16_t callee_port = (callee_entry->transport == common::TransportType::TCP)
+                                 ? proxy_tcp_port_ : proxy_udp_port_;
+    forwarded_message.prepend_header("Via", build_proxy_via(callee_entry->transport, callee_port));
 
     auto session = registry_.create_call(call_id, caller, callee);
     if (!session) {
@@ -256,7 +258,12 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
     }
 
     common::SIPMessage forwarded_message = message;
-    forwarded_message.prepend_header("Via", build_proxy_via());
+    const auto ack_transport = (sender == context->caller)
+                               ? context->callee_transport
+                               : context->caller_transport;
+    const uint16_t ack_port = (ack_transport == common::TransportType::TCP)
+                              ? proxy_tcp_port_ : proxy_udp_port_;
+    forwarded_message.prepend_header("Via", build_proxy_via(ack_transport, ack_port));
 
     auto session = registry_.find_call(call_id);
     if (session) {
@@ -319,7 +326,12 @@ RoutingResult SIPRouter::handle_bye(const common::SIPMessage& message) {
     }
 
     common::SIPMessage forwarded_message = message;
-    forwarded_message.prepend_header("Via", build_proxy_via());
+    const auto bye_transport = (sender == context->caller)
+                               ? context->callee_transport
+                               : context->caller_transport;
+    const uint16_t bye_port = (bye_transport == common::TransportType::TCP)
+                              ? proxy_tcp_port_ : proxy_udp_port_;
+    forwarded_message.prepend_header("Via", build_proxy_via(bye_transport, bye_port));
 
     auto session = registry_.find_call(call_id);
     if (session) {
@@ -494,8 +506,10 @@ std::string SIPRouter::extract_sip_identity(const std::string& header) {
     return header.substr(start, end - start);
 }
 
-std::string SIPRouter::build_proxy_via() {
-    return "SIP/2.0/UDP proxy.local:5060";
+std::string SIPRouter::build_proxy_via(common::TransportType transport, uint16_t port) {
+    const std::string protocol = (transport == common::TransportType::TCP)
+                              ? "TCP" : "UDP";
+    return "SIP/2.0/" + protocol + " proxy.local:" + std::to_string(port);
 }
 
 common::SIPMessage SIPRouter::make_error_response(
@@ -587,10 +601,10 @@ std::optional<CallContext> SIPRouter::get_call_context(const std::string& call_i
 }
 
 void SIPRouter::strip_proxy_via(common::SIPMessage& message) {
-    const std::string proxy_via = build_proxy_via();
+    const std::string proxy_host = "proxy.local";
 
     for (auto it = message.headers.begin(); it != message.headers.end(); ++it) {
-        if (it->name == "Via" && it->value == proxy_via) {
+        if (it->name == "Via" && it->value.find(proxy_host) != std::string::npos) {
             message.headers.erase(it);
             return;
         }
