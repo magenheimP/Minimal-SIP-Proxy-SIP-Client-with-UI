@@ -11,11 +11,11 @@
 namespace proxy {
 
 void RegistrationTable::register_user(const std::string& user,
-                                      const std::string& contact) {
-    //  unique_lock for write operations
+                                      const std::string& contact,
+                                      common::TransportType transport) {
     std::unique_lock lock(mutex_);
 
-    registrations_[user] = contact;
+    registrations_[user] = ContactEntry{contact, transport};
 
     common::Logger::instance("proxy.log").log(
         "RegistrationTable",
@@ -35,9 +35,9 @@ std::optional<std::string> RegistrationTable::get_contact(const std::string& use
             "RegistrationTable",
             "",
             "LOOKUP_OK",
-            "Found contact for user = " + user + ", contact = " + it->second);
+            "Found contact for user = " + user + ", contact = " + it->second.contact);
 
-        return it->second;
+        return it->second.contact;
     }
 
     common::Logger::instance("proxy.log").log(
@@ -45,6 +45,16 @@ std::optional<std::string> RegistrationTable::get_contact(const std::string& use
         "",
         "LOOKUP_FAIL",
         "User not found in registration table: user = " + user);
+
+    return std::nullopt;
+}
+
+std::optional<ContactEntry> RegistrationTable::get_contact_entry(const std::string& user) const {
+    std::shared_lock lock(mutex_);
+
+    auto it = registrations_.find(user);
+    if (it != registrations_.end())
+        return it->second;
 
     return std::nullopt;
 }

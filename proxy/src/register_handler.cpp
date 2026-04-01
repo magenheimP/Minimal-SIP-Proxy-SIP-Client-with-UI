@@ -66,7 +66,8 @@ static common::SIPMessage make_response(
 RegisterHandler::RegisterHandler(RegistrationTable& table)
     : table_(table) {}
 
-common::SIPMessage RegisterHandler::handle(const common::SIPMessage& message) const {
+common::SIPMessage RegisterHandler::handle(const common::SIPMessage& message,
+                                            common::TransportType transport) const {
 
     const std::string call_id = message.get_header("Call-ID");
 
@@ -110,7 +111,7 @@ common::SIPMessage RegisterHandler::handle(const common::SIPMessage& message) co
         return make_response("SIP/2.0 400 Bad Request", message);
     }
 
-    table_.register_user(user_identity, contact);
+    table_.register_user(user_identity, contact, transport);
 
     common::Logger::instance("proxy.log").log(
       "RegisterHandler",
