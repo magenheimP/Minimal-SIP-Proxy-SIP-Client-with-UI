@@ -41,11 +41,17 @@ if [ "$USE_TCP" = true ]; then
     PROXY_PORT=5061          # TCP port the proxy listens on
     PROXY_EXTRA_ARGS="--tcp-port ${PROXY_PORT}"
     CLIENT_TRANSPORT_FLAG="--tcp"
+    # TCP needs longer timeouts due to connection setup overhead
+    CALLEE_WAIT_TIME=10       # Time callee waits before attempting to answer
+    CALLER_CALL_WAIT=8       # Time caller waits after making call before hangup
 else
     TRANSPORT_LABEL="UDP"
     PROXY_PORT=5060          # UDP port (default)
     PROXY_EXTRA_ARGS=""
     CLIENT_TRANSPORT_FLAG=""
+    # UDP can use shorter timeouts
+    CALLEE_WAIT_TIME=6
+    CALLER_CALL_WAIT=4
 fi
 
 CLIENT_START_PORT=6000
@@ -304,13 +310,19 @@ test_single_client() {
 
         log_info "Client $client_id: Will call $target_user"
 
+        # Caller sequence:
+        # 1. Auto-register (immediate)
+        # 2. Wait 1 second to ensure registration is complete
+        # 3. Make call
+        # 4. Wait CALLER_CALL_WAIT seconds for callee to answer and call to establish
+        # 5. Hangup
         cat > "$test_script" <<EOF
 status
 sleep 1
 call
 ${target_user}
 ${DOMAIN}
-sleep 4
+sleep ${CALLER_CALL_WAIT}
 hangup
 exit
 EOF
@@ -318,11 +330,17 @@ EOF
         # CALLEE: Register, wait for call to arrive, answer, wait, then hangup
         log_info "Client $client_id: Will answer calls"
 
+        # Callee sequence:
+        # 1. Auto-register (immediate)
+        # 2. Wait CALLEE_WAIT_TIME seconds for caller to register and make call
+        # 3. Answer the incoming call
+        # 4. Wait 1 second in the call
+        # 5. Hangup
         cat > "$test_script" <<EOF
 status
-sleep 6
+sleep ${CALLEE_WAIT_TIME}
 answer
-sleep 1
+sleep 5
 hangup
 exit
 EOF
@@ -330,9 +348,20 @@ EOF
 
     local start_time=$(date +%s.%N)
 
+    # Adjust timeout based on transport and role
+    # Callers complete faster, callees need to wait longer
+    local client_timeout
+    if [ $((client_id % 2)) -eq 0 ]; then
+        # Caller: 1s register + 1s status + CALLER_CALL_WAIT + 2s buffer
+        client_timeout=$((CALLEE_WAIT_TIME + 10))
+    else
+        # Callee: 1s register + CALLEE_WAIT_TIME + 1s in-call + 2s buffer
+        client_timeout=$((CALLEE_WAIT_TIME + 25))
+    fi
+
     # Start client with auto-register; pass --tcp when in TCP mode
     (
-        timeout -k 5 35 "$CLIENT_BIN" "$PROXY_IP" "$PROXY_PORT" --cli \
+        timeout -k 5 $client_timeout "$CLIENT_BIN" "$PROXY_IP" "$PROXY_PORT" --cli \
             ${CLIENT_TRANSPORT_FLAG} \
             --user "$username" --domain "$DOMAIN" < "$test_script" \
             > "$client_log" 2>&1
@@ -341,9 +370,9 @@ EOF
     local client_pid=$!
     CLIENT_PIDS[$client_id]=$client_pid
 
-    # Wait for this specific client to complete (max 40 seconds)
+    # Wait for this specific client to complete
     local wait_count=0
-    local max_wait=40
+    local max_wait=$client_timeout
     while kill -0 $client_pid 2>/dev/null && [ $wait_count -lt $max_wait ]; do
         sleep 0.5
         wait_count=$((wait_count + 1))
@@ -389,6 +418,7 @@ EOF
 
 run_concurrent_clients() {
     log_info "Launching $NUM_CLIENTS concurrent clients [${TRANSPORT_LABEL}]..."
+    log_info "Timing configuration: Callee wait=${CALLEE_WAIT_TIME}s, Caller call wait=${CALLER_CALL_WAIT}s"
 
     local pids=()
 
@@ -401,7 +431,12 @@ run_concurrent_clients() {
     done
 
     # Wait for callees to start and register
-    sleep 2
+    # In TCP mode, we need slightly more time for connection establishment
+    if [ "$USE_TCP" = true ]; then
+        sleep 3
+    else
+        sleep 2
+    fi
 
     # Second phase: launch all callers (even clients)
     log_info "Phase 2: Launching callers..."
@@ -412,7 +447,7 @@ run_concurrent_clients() {
     done
 
     log_info "All clients launched, waiting for completion..."
-    log_info "This may take up to 30 seconds per client..."
+    log_info "This may take up to $((CALLEE_WAIT_TIME + 10)) seconds per client..."
 
     # Wait for all background test functions to complete
     local completed=0
@@ -571,6 +606,7 @@ Configuration:
   - Number of Clients: $NUM_CLIENTS
   - Proxy: ${PROXY_IP}:${PROXY_PORT} (${TRANSPORT_LABEL})
   - Domain: $DOMAIN
+  - Timing: Callee wait=${CALLEE_WAIT_TIME}s, Caller call wait=${CALLER_CALL_WAIT}s
 
 Results:
   - Successful Clients: $report_successful
