@@ -26,6 +26,8 @@ namespace proxy
         CallState state() const;
         const std::string& call_id() const;
 
+        bool is_terminated() const;
+
     private:
         void apply_event(CallEvent event);
 

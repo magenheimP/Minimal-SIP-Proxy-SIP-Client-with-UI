@@ -9,11 +9,13 @@ int main(int argc, char* argv[])
 {
     // Required args: <server_ip> <server_port> --cli|--ui
     // Optional:      --user <username> --domain <domain>
+    // Optional: --tcp
 
     if (argc < 4) {
         std::cerr << "Usage: "
                   << argv[0]
                   << " <server_ip> <server_port> --cli|--ui"
+                  << " [--tcp]"
                   << " [--user <username>] [--domain <domain>]\n";
         return 1;
     }
@@ -28,22 +30,27 @@ int main(int argc, char* argv[])
         return 1;
     }
 
-
     std::string auto_username;
     std::string auto_domain;
 
+    bool use_tcp = false;
+
     for (int i = 4; i < argc; ++i) {
         const std::string arg = argv[i];
+
         if (arg == "--user" && i + 1 < argc) {
             auto_username = argv[++i];
         } else if (arg == "--domain" && i + 1 < argc) {
             auto_domain = argv[++i];
-        } else {
+        }
+        else if (arg == "--tcp") {
+            use_tcp = true;
+        }
+        else {
             std::cerr << "Unknown argument: " << arg << "\n";
             return 1;
         }
     }
-
 
     if (auto_username.empty() != auto_domain.empty()) {
         std::cerr << "Both --user and --domain must be provided together.\n";
@@ -54,10 +61,10 @@ int main(int argc, char* argv[])
 
     common::Logger::instance("client.log")
         .log("MAIN", "-", "START",
-             "Client starting in " + mode + " mode");
-
+             "Client starting in " + mode + " mode"
+             + (use_tcp ? " [TCP]" : " [UDP]"));
     try {
-        SIPClient sip_client(server_ip, server_port);
+        SIPClient sip_client(server_ip, server_port, use_tcp);
 
         if (mode == "--cli") {
             sip_client.start_transport();
@@ -89,8 +96,8 @@ int main(int argc, char* argv[])
                     qt_app.notify_incoming_call(call_id, caller);
                 });
             sip_client.set_call_error_callback([&qt_app](int code, const std::string& reason) {
-                 qt_app.notify_call_error(code, reason);
-                });
+               qt_app.notify_call_error(code, reason);
+              });
 
             sip_client.start_transport();
 

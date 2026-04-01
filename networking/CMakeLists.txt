@@ -6,6 +6,10 @@ add_library(networking
         src/udp_transport.cpp
         include/networking/dispatcher.hpp
         src/dispatcher.cpp
+        src/tcp_socket.cpp
+        include/networking/tcp_socket.hpp
+        include/networking/tcp_transport.hpp
+        src/tcp_transport.cpp
 )
 
 target_include_directories(networking
