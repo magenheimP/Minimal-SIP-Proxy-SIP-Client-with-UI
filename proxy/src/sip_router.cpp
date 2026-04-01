@@ -6,6 +6,8 @@
 #include "../../common/include/common/logger.hpp"
 #include <unordered_set>
 
+#include "proxy/metrics_collector.hpp"
+
 namespace proxy {
 
 SIPRouter::SIPRouter(RegistrationTable& table)
@@ -184,7 +186,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
         RoutingResult result;
         result.action = RoutingAction::RespondLocally;
-        result.response = make_error_response("SIP/2.0 400 Different protocol", message);
+        result.response = make_error_response("SIP/2.0 404 Different protocol", message);
         result.user = callee;
 
         return result;
@@ -223,6 +225,7 @@ RoutingResult SIPRouter::handle_invite(const common::SIPMessage& message,
 
     session->on_request(message);
 
+    MetricsCollector::instance().inc_active_calls();
     common::Logger::instance().log(
         "SIPRouter",
         call_id,
@@ -302,6 +305,13 @@ RoutingResult SIPRouter::handle_ack(const common::SIPMessage& message) {
         result.ip = context->caller_ip;
         result.port = context->caller_port;
         result.callee_transport = context->caller_transport;
+    }
+
+    auto session_check = registry_.find_call(call_id);
+    if (session_check && session_check->is_terminated()) {
+        registry_.remove_call(call_id);
+        std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+        call_contexts_.erase(call_id);
     }
 
     return result;
@@ -411,6 +421,16 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
             }
         }
     }
+    if (status_code == 603 && cseq.find("INVITE") != std::string::npos) {
+        MetricsCollector::instance().dec_active_calls();
+
+        common::Logger::instance().log(
+            "SIPRouter",
+            call_id,
+            "CALL_REMOVED",
+            "Removed call context and session after 603 decline to INVITE"
+        );
+    }
 
     if (status_code == 200 && cseq.find("BYE") != std::string::npos) {
         registry_.remove_call(call_id);
@@ -420,7 +440,23 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
             std::lock_guard<std::mutex> lock(call_contexts_mutex_);
             call_contexts_.erase(call_id);
         }
-
+        MetricsCollector::instance().dec_active_calls();
+        common::Logger::instance().log(
+            "SIPRouter",
+            call_id,
+            "CALL_REMOVED",
+            "Removed call context and session after 200 OK to BYE"
+        );
+    }
+    if (status_code == 486 && cseq.find("INVITE") != std::string::npos) {
+        registry_.remove_call(call_id);
+        MetricsCollector::instance().dec_active_calls();
+        // Acquire lock before erasing from the shared call_contexts_ map
+        {
+            std::lock_guard<std::mutex> lock(call_contexts_mutex_);
+            call_contexts_.erase(call_id);
+        }
+        MetricsCollector::instance().dec_active_calls();
         common::Logger::instance().log(
             "SIPRouter",
             call_id,

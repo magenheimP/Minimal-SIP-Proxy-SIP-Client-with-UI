@@ -1,4 +1,6 @@
 #include <iostream>
+
+#include "proxy/metrics_server.hpp"
 #include "proxy/sip_proxy.hpp"
 
 int main(int argc, char* argv[])
@@ -25,6 +27,8 @@ int main(int argc, char* argv[])
     }
 
     proxy::SIPProxy proxy;
+    MetricsServer metrics_server;
+    metrics_server.start(8080);
 
     proxy.start(udp_port, tcp_port);
 
