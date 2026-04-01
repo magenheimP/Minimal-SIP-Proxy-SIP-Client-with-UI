@@ -1,7 +1,7 @@
 # Interface Contracts — Minimal SIP Proxy & SIP Client
 
 > **Project:** Minimal-SIP-Proxy-SIP-Client-with-UI  
-> **Last updated:** 2026-03-24  
+> **Last updated:** 2026-03-30  
 > **Source of truth:** `networking/`, `common/`, `proxy/`, `client/`, `ui/`
 
 ---
@@ -22,7 +22,7 @@
 
 **Owner:** Group 1 (Networking)  
 **Header:** `networking/include/networking/IUdpTransport.hpp`  
-**Concrete impl:** `networking/include/networking/udp_transport.hpp`
+**Concrete impl:** `networking/include/networking/udp_transport.hpp`, `networking/include/networking/tcp_transport.hpp`
 
 ### Interface
 
@@ -56,6 +56,29 @@ uint16_t local_port() const;   // query which port was bound
 
 Internally it owns a `UdpSocket` and a receive thread (`std::thread recv_thread`). The receive loop runs while `std::atomic<bool> running` is `true`.
 
+---
+
+### Concrete Implementation — `TcpTransport`
+
+`TcpTransport` extends `IUdpTransport` and supports two modes of operation:
+
+**Server mode (proxy):** call `start(port, cb)` to bind, listen, and begin the accept loop. Each accepted connection is tracked in an internal map (`"ip:port" → fd`), allowing `send()` to route responses back to the correct client.
+
+**Client mode (sip_client):** call `connect(server_ip, server_port, cb)` instead of `start()`. A single TCP connection is established and reused for all messages.
+
+Additional public method:
+
+```cpp
+uint16_t local_port() const;   // query which port was bound (server mode)
+
+// CLIENT MODE ONLY — call instead of start()
+void connect(const std::string& server_ip,
+             uint16_t           server_port,
+             ReceiveCallback    callback);
+```
+
+Framing: Because all SIP messages in this system have `Content-Length: 0`, every complete message ends with `\r\n\r\n`. `TcpTransport` uses this as its message boundary delimiter instead of relying on UDP datagram boundaries.
+
 ### Rules
 
 | Rule | Description |
@@ -65,14 +88,16 @@ Internally it owns a `UdpSocket` and a receive thread (`std::thread recv_thread`
 | **Raw strings only** | Data is passed as a raw `std::string`. Parsing is the proxy's responsibility. |
 | **Thread safety** | `send()` and `stop()` may be called from any thread; `UdpTransport` must handle concurrent access. |
 | **Lifecycle** | Call `start()` exactly once before `send()`. Call `stop()` to terminate the receive loop cleanly. |
+| **TCP framing** | `TcpTransport` uses `\r\n\r\n` as a message delimiter. The transport MUST NOT split or merge SIP messages. |
+| **TCP client mode** | Call `connect()` instead of `start()` when using `TcpTransport` on the client side. |
 
 ### Data Flow
 
 ```
-Network (UDP) ──► UdpSocket ──► recv_thread ──► ReceiveCallback(data, ip, port)
-                                                        │
-                                                        ▼
-                                                  SIPProxy::handle_packet()
+Network (UDP) ──► UdpSocket  ──► recv_thread  ──► ReceiveCallback(data, ip, port)
+                                                          │
+Network (TCP) ──► TcpSocket  ──► recv_thread  ──►        ▼
+                               (per connection)   SIPProxy::handle_packet()
                                                   (parsing happens here)
 ```
 
@@ -519,7 +544,9 @@ INIT ─────────────────► TRYING
 | Contract | File(s) |
 |----------|---------|
 | Transport interface | `networking/include/networking/IUdpTransport.hpp` |
-| Transport implementation | `networking/include/networking/udp_transport.hpp` + `.cpp` |
+| UDP transport implementation | `networking/include/networking/udp_transport.hpp` + `.cpp` |
+| TCP transport implementation | `networking/include/networking/tcp_transport.hpp` + `.cpp` |
+| TCP socket | `networking/include/networking/tcp_socket.hpp` + `.cpp` |
 | Shared SIP types | `common/include/common/sip_message.hpp` + `.cpp` |
 | SIP parser | `proxy/include/proxy/sip_parser.hpp` + `.cpp` |
 | SIP router | `proxy/include/proxy/sip_router.hpp` + `.cpp` |

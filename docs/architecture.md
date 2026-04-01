@@ -4,8 +4,8 @@
 
 This project implements a **minimal SIP communication system** consisting of:
 
-* A **SIP Proxy Server** (Linux, UDP-based)
-* A **SIP Client** (Windows, with Qt UI)
+* A **SIP Proxy Server** (Linux, UDP and TCP)
+* A **SIP Client** (Windows/Linux, with Qt UI)
 
 The system supports a basic SIP call lifecycle:
 
@@ -17,6 +17,7 @@ The architecture is designed to demonstrate:
 * Message-based processing
 * Clear separation of concerns
 * Safe memory management (RAII, smart pointers)
+* Pluggable transport layer (UDP and TCP behind a shared interface)
 
 ---
 
@@ -30,7 +31,7 @@ The architecture is designed to demonstrate:
 | (UI + Logic)   |         | (UI + Logic)   |
 +--------+-------+         +--------+-------+
          |                          |
-         |        UDP (SIP)         |
+         |    UDP or TCP (SIP)      |
          +-----------+--------------+
                      |
               +------+------+
@@ -41,9 +42,9 @@ The architecture is designed to demonstrate:
 
 The proxy acts as an intermediary:
 
-* Receives all SIP messages
+* Receives all SIP messages (over UDP or TCP)
 * Parses and processes them
-* Routes them to the correct destination
+* Routes them to the correct destination using the same transport the client used
 
 ---
 
@@ -52,19 +53,20 @@ The proxy acts as an intermediary:
 ### 3.1 Processing Pipeline
 
 ```
-UDP Listener
-    ↓
-Dispatcher Thread
-    ↓
-Concurrent Queue<SIPMessage>
-    ↓
-Worker Thread Pool
-    ↓
-SIP Router
-    ↓
-Call State Machine
-    ↓
-Logger
+UDP Listener  |  TCP Listener
+      \              /
+       \            /
+     Dispatcher Thread
+            ↓
+   Concurrent Queue<SIPMessage>
+            ↓
+     Worker Thread Pool
+            ↓
+         SIP Router
+            ↓
+    Call State Machine
+            ↓
+          Logger
 ```
 
 ---
@@ -73,7 +75,7 @@ Logger
 
 #### 3.2.1 UDP Listener
 
-* Listens on UDP port **5060**
+* Listens on UDP port **5060** (default)
 * Receives raw SIP messages using `recvfrom`
 * Sends messages using `sendto`
 * Runs in **non-blocking mode**
@@ -84,12 +86,29 @@ Key responsibility:
 
 ---
 
-#### 3.2.2 Dispatcher Thread
+#### 3.2.2 TCP Listener *(added)*
+
+* Listens on a configurable TCP port (default **5061** when enabled)
+* Accepts incoming TCP connections in a dedicated **accept thread**
+* Each accepted connection gets its own **receive thread** that reads until `\r\n\r\n` (SIP message boundary)
+* Sends responses back on the same persistent TCP connection
+
+Framing:
+
+* TCP is stream-based. Because all SIP messages in this system have an empty body (`Content-Length: 0`), every complete message ends with `\r\n\r\n`, which is used as the message delimiter.
+
+Key responsibility:
+
+* Provide the same `IUdpTransport` interface as the UDP listener so the rest of the proxy is transport-agnostic.
+
+---
+
+#### 3.2.3 Dispatcher Thread
 
 * Single thread responsible for:
 
-    * Receiving messages from UDP socket
-    * Pushing them into a thread-safe queue
+  * Receiving messages from the active transport (UDP or TCP)
+  * Pushing them into a thread-safe queue
 
 Why it exists:
 
@@ -98,13 +117,13 @@ Why it exists:
 
 ---
 
-#### 3.2.3 Concurrent Queue
+#### 3.2.4 Concurrent Queue
 
 * Thread-safe queue shared between dispatcher and workers
 * Supports:
 
-    * Blocking `pop()`
-    * Safe shutdown
+  * Blocking `pop()`
+  * Safe shutdown
 
 Implementation requirements:
 
@@ -113,13 +132,13 @@ Implementation requirements:
 
 ---
 
-#### 3.2.4 Worker Thread Pool
+#### 3.2.5 Worker Thread Pool
 
 * Fixed number of worker threads
 * Each thread:
 
-    * Pulls messages from queue
-    * Processes them independently
+  * Pulls messages from queue
+  * Processes them independently
 
 Benefits:
 
@@ -128,7 +147,7 @@ Benefits:
 
 ---
 
-#### 3.2.5 SIP Parser & Serializer
+#### 3.2.6 SIP Parser & Serializer
 
 Parser:
 
@@ -146,7 +165,7 @@ Important constraints:
 
 ---
 
-#### 3.2.6 SIP Router
+#### 3.2.7 SIP Router
 
 Core logic of the proxy.
 
@@ -164,7 +183,7 @@ Examples:
 
 ---
 
-#### 3.2.7 Registration Table
+#### 3.2.8 Registration Table
 
 * Thread-safe mapping:
 
@@ -183,7 +202,7 @@ Requirements:
 
 ---
 
-#### 3.2.8 Call State Machine
+#### 3.2.9 Call State Machine
 
 Each call has a state:
 
@@ -199,7 +218,7 @@ Responsibilities:
 
 ---
 
-#### 3.2.9 Structured Logger
+#### 3.2.10 Structured Logger
 
 Logs every important event in format:
 
@@ -223,9 +242,66 @@ Also logs:
 
 ---
 
-## 4. SIP Client Architecture
+## 4. Transport Abstraction
 
-### 4.1 Processing Flow
+### 4.1 Interface — `IUdpTransport`
+
+Both the UDP and TCP transports implement the same interface:
+
+```cpp
+class IUdpTransport {
+public:
+    using ReceiveCallback =
+        std::function<void(const std::string& data,
+                           const std::string& remote_ip,
+                           uint16_t remote_port)>;
+
+    virtual void start(uint16_t port, ReceiveCallback callback) = 0;
+    virtual void send(const std::string& data,
+                      const std::string& remote_ip,
+                      uint16_t remote_port) = 0;
+    virtual void stop() = 0;
+};
+```
+
+The proxy and client hold a `std::unique_ptr<IUdpTransport>` and are completely unaware of which transport is active at runtime.
+
+### 4.2 Concrete Implementations
+
+| Class | Transport | Notes |
+|-------|-----------|-------|
+| `UdpTransport` | UDP | Single receive thread, `recvfrom`/`sendto` |
+| `TcpTransport` | TCP | Accept thread + one receive thread per connection; `send()` looks up the correct fd by `ip:port` key |
+
+### 4.3 TCP Transport — Modes of Operation
+
+`TcpTransport` supports two modes:
+
+**Server mode (proxy):** `start(port, cb)` binds and listens, then runs an accept loop. Each accepted client fd is stored in an internal map keyed by `"ip:port"` so that `send()` can find the right connection.
+
+**Client mode (sip_client):** `connect(server_ip, server_port, cb)` opens a single connection to the proxy. `send()` writes on that single fd directly.
+
+### 4.4 Selecting the Transport
+
+**Proxy:**
+
+```
+./sip_proxy                          # UDP only (port 5060)
+./sip_proxy --tcp-port 5061          # UDP + TCP (ports 5060 and 5061)
+```
+
+**Client:**
+
+```
+./sip_client 127.0.0.1 5060 --cli           # UDP
+./sip_client 127.0.0.1 5061 --cli --tcp     # TCP
+```
+
+---
+
+## 5. SIP Client Architecture
+
+### 5.1 Processing Flow
 
 ```
 Qt UI
@@ -236,7 +312,7 @@ SIP Message Builder
     ↓
 Header Injector
     ↓
-UDP Sender
+Transport (UdpTransport or TcpTransport)
     ↓
 Proxy
     ↓
@@ -249,9 +325,9 @@ UI Update
 
 ---
 
-### 4.2 Components Description
+### 5.2 Components Description
 
-#### 4.2.1 Qt UI
+#### 5.2.1 Qt UI
 
 Provides user interface for:
 
@@ -261,6 +337,7 @@ Provides user interface for:
 * Call initiation
 * Hangup
 * Custom header input
+* Transport selection (UDP/TCP)
 
 Also displays:
 
@@ -269,14 +346,14 @@ Also displays:
 
 ---
 
-#### 4.2.2 UI Controller
+#### 5.2.2 UI Controller
 
 * Connects UI actions to client logic
 * Translates button clicks into SIP actions
 
 ---
 
-#### 4.2.3 SIP Message Builder
+#### 5.2.3 SIP Message Builder
 
 Responsible for creating valid SIP messages:
 
@@ -292,7 +369,7 @@ Ensures:
 
 ---
 
-#### 4.2.4 Header Injection Engine
+#### 5.2.4 Header Injection Engine
 
 Allows dynamic modification of messages.
 
@@ -308,21 +385,21 @@ Rules:
 
 ---
 
-#### 4.2.5 UDP Sender
+#### 5.2.5 Transport Layer
 
-* Sends SIP messages to proxy via UDP
-* Uses same transport abstraction as proxy
+* Sends SIP messages to proxy via the active transport (`UdpTransport` or `TcpTransport`)
+* Selected at startup via the `--tcp` flag; transparent to the rest of the client
 
 ---
 
-#### 4.2.6 Response Listener Thread
+#### 5.2.6 Response Listener Thread
 
 * Dedicated thread listening for responses
 * Processes incoming messages asynchronously
 
 ---
 
-#### 4.2.7 Client State Machine
+#### 5.2.7 Client State Machine
 
 Tracks call state on client side:
 
@@ -337,18 +414,20 @@ Updates UI accordingly.
 
 ---
 
-## 5. Concurrency Model
+## 6. Concurrency Model
 
 ### Proxy
 
 * 1 Dispatcher thread
 * N Worker threads (thread pool)
 * Shared queue
+* UDP: 1 receive thread
+* TCP: 1 accept thread + 1 receive thread per active connection
 
 ### Client
 
 * 1 UI thread
-* 1 Network listener thread
+* 1 Network listener thread (UDP receive loop or TCP receive loop)
 
 ---
 
@@ -361,37 +440,37 @@ Updates UI accordingly.
 
 ---
 
-## 6. Data Flow Example (INVITE)
+## 7. Data Flow Example (INVITE over TCP)
 
-1. Client A sends INVITE
-2. Proxy receives via UDP
+1. Client A sends INVITE over TCP connection to proxy
+2. Proxy's TCP receive thread reads message (framed by `\r\n\r\n`)
 3. Dispatcher pushes to queue
 4. Worker thread processes message
 5. Parser creates SIPMessage
-6. Router finds target (Client B)
-7. Message forwarded to Client B
-8. Responses follow same path back
+6. Router finds target (Client B) in registration table
+7. Message forwarded to Client B via its TCP connection
+8. Responses follow the same path back
 
 ---
 
-## 7. Memory Management
+## 8. Memory Management
 
 Strict ownership model:
 
-* `std::unique_ptr` → exclusive ownership
+* `std::unique_ptr` → exclusive ownership (transport objects)
 * `std::shared_ptr` → shared call session
 * `std::weak_ptr` → avoid cycles
 
 Rules:
 
 * No raw `new/delete`
-* RAII for all resources (sockets, threads)
+* RAII for all resources (sockets, threads, file descriptors)
 
 ---
 
-## 8. Design Principles
+## 9. Design Principles
 
-### 8.1 Separation of Concerns
+### 9.1 Separation of Concerns
 
 Each module has a single responsibility:
 
@@ -401,49 +480,57 @@ Each module has a single responsibility:
 
 ---
 
-### 8.2 Message-Oriented Design
+### 9.2 Message-Oriented Design
 
 * System processes **messages**, not function calls
 * Enables concurrency and scalability
 
 ---
 
-### 8.3 Thread Safety First
+### 9.3 Thread Safety First
 
 * All shared data structures are protected
 * No undefined behavior due to races
 
 ---
 
-### 8.4 Minimal but Extensible
+### 9.4 Pluggable Transport
+
+* `IUdpTransport` decouples SIP logic from network I/O
+* Switching between UDP and TCP requires no changes to the proxy or client business logic
+
+---
+
+### 9.5 Minimal but Extensible
 
 System is intentionally simple, but allows:
 
 * epoll-based networking
-* TCP transport
+* TLS over TCP
 * Advanced SIP features
 
 ---
 
-## 9. Future Extensions
+## 10. Future Extensions
 
 Possible improvements:
 
 * epoll/reactor pattern
-* TCP support
+* TLS support
 * Load testing tools
 * Metrics endpoint
 * SIP authentication
 
 ---
 
-## 10. Summary
+## 11. Summary
 
 This architecture provides:
 
 * Scalable request handling via thread pool
 * Clear separation between networking and logic
 * Safe concurrency model
+* Pluggable transport layer (UDP and TCP behind `IUdpTransport`)
 * Extensible SIP processing pipeline
 
 It is designed for learning core backend concepts while remaining realistic enough to resemble production systems.

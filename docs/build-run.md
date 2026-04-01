@@ -1,7 +1,7 @@
 # Build & Run Guide
 
 This project implements a minimal SIP Proxy and SIP Client with a Windows UI.
-It supports basic SIP call flow (REGISTER, INVITE, BYE) over UDP.
+It supports basic SIP call flow (REGISTER, INVITE, BYE) over **UDP and TCP**.
 
 ---
 
@@ -52,16 +52,29 @@ cmake --build build
 
 ## Run SIP Proxy (Linux)
 
-Manual:
+**UDP only (default, port 5060):**
 
 ```
 ./sip_proxy
+```
+
+**UDP + TCP (ports 5060 and 5061):**
+
+```
+./sip_proxy --tcp-port 5061
+```
+
+**Custom ports:**
+
+```
+./sip_proxy --udp-port 5060 --tcp-port 5062
 ```
 
 CMake build:
 
 ```
 ./build/bin/sip_proxy
+./build/bin/sip_proxy --tcp-port 5061
 ```
 
 ---
@@ -71,13 +84,15 @@ CMake build:
 You can also use the helper script:
 
 ```
-./scripts/run_proxy.sh
+./scripts/run_proxy.sh              # UDP only
+./scripts/run_proxy.sh --tcp        # UDP + TCP (TCP on port 5061)
+./scripts/run_proxy.sh --tcp-port 5062   # UDP + TCP on a custom port
 ```
 
 This script:
 
 * Compiles the proxy
-* Runs it immediately
+* Runs it with the selected transport(s) immediately
 
 ---
 
@@ -92,16 +107,18 @@ cmake --build build
 
 ## Run SIP Client (Manual)
 
-CLI:
+**UDP mode (default):**
 
 ```
 ./build/bin/sip_client 127.0.0.1 5060 --cli
-```
-
-UI:
-
-```
 ./build/bin/sip_client 127.0.0.1 5060 --ui
+```
+
+**TCP mode:**
+
+```
+./build/bin/sip_client 127.0.0.1 5061 --cli --tcp
+./build/bin/sip_client 127.0.0.1 5061 --ui --tcp
 ```
 
 ---
@@ -111,77 +128,110 @@ UI:
 Use the helper script:
 
 ```
-./scripts/run_client.sh [mode] [ip] [port]
+./scripts/run_client.sh [--tcp] [mode] [ip] [port]
 ```
+
 ### Parameters
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
+| `--tcp` | *(absent)* | Enable TCP transport. When present, the default port changes to `5061`. Omit for UDP (default port `5060`). |
 | `[mode]` | `--cli` | `--cli` runs a terminal interface. `--ui` launches the Qt graphical window. |
 | `[ip]` | `127.0.0.1` | IP address of the **SIP Proxy** to connect to. |
-| `[port]` | `5060` | UDP port the **SIP Proxy** is listening on. Must match the proxy's configured port. |
-
-
+| `[port]` | `5060` (UDP) / `5061` (TCP) | UDP or TCP port the **SIP Proxy** is listening on. Must match the proxy's configured port. |
 
 ### Examples
 
-Default (CLI):
+Default (UDP CLI):
 
 ```
 ./scripts/run_client.sh
 ```
 
-CLI explicitly:
-
-```
-./scripts/run_client.sh --cli
-```
-
-UI mode:
+UDP UI mode:
 
 ```
 ./scripts/run_client.sh --ui
 ```
 
-Custom server:
+TCP CLI mode:
+
+```
+./scripts/run_client.sh --tcp
+```
+
+TCP UI mode:
+
+```
+./scripts/run_client.sh --tcp --ui
+```
+
+Custom server (UDP):
 
 ```
 ./scripts/run_client.sh --ui 192.168.1.10 5060
+```
+
+Custom server (TCP):
+
+```
+./scripts/run_client.sh --tcp --ui 192.168.1.10 5061
 ```
 
 ### What the script does:
 
 * Creates `build/` if missing
 * Builds the project using CMake
-* Runs the client in selected mode (CLI/UI)
+* Runs the client in selected mode (CLI/UI) over the selected transport (UDP/TCP)
 
 ---
 
 ## Run Stress Test
+
+**UDP (default):**
 
 ```
 rm -rf build/
 cmake -B build
 cmake --build build
 sudo ./scripts/stress_test.sh
-and then enter your password
 ```
+
+**TCP:**
+
+```
+rm -rf build/
+cmake -B build
+cmake --build build
+sudo ./scripts/stress_test.sh --tcp
+```
+
+The `--tcp` flag starts the proxy with `--tcp-port 5061` and passes `--tcp` to every client. Results are saved to a directory named `stress_test_results_<timestamp>_TCP` (or `_UDP`) inside `scripts/`.
 
 ---
 
 ## Example Scenario
 
-Terminal 1:
+Terminal 1 — Start proxy:
 
 ```
-./sip_proxy
+./sip_proxy                     # UDP
+./sip_proxy --tcp-port 5061     # TCP
 ```
 
-Terminal 2:
-Run client A (alice)
+Terminal 2 — Run client A (alice):
 
-Terminal 3:
-Run client B (bob)
+```
+./scripts/run_client.sh --cli           # UDP
+./scripts/run_client.sh --tcp --cli     # TCP
+```
+
+Terminal 3 — Run client B (bob):
+
+```
+./scripts/run_client.sh --cli           # UDP
+./scripts/run_client.sh --tcp --cli     # TCP
+```
 
 ### Steps:
 
@@ -198,9 +248,9 @@ Run client B (bob)
 
 ## Troubleshooting SIP Proxy
 
-### Port 5060 already in use
+### Port 5060 (or 5061) already in use
 
-The proxy failed to bind to port `5060` on startup.
+The proxy failed to bind to its port on startup.
 
 **Possible fixes:**
 
@@ -208,9 +258,10 @@ The proxy failed to bind to port `5060` on startup.
 
   ```
   sudo lsof -i :5060
+  sudo lsof -i :5061
   sudo kill -9 <PID>
   ```
-* Or change the proxy’s listening port in your configuration/code.
+* Or specify a different port when starting the proxy.
 
 ---
 
@@ -238,8 +289,8 @@ The proxy is running but not receiving SIP messages.
 
 **Possible fixes:**
 
-* Check firewall settings (UDP traffic on port 5060 must be allowed)
-* Ensure the client is sending to the correct IP and port
+* Check firewall settings (UDP traffic on port 5060 and TCP traffic on port 5061 must be allowed)
+* Ensure the client transport matches the proxy transport (`--tcp` on both, or neither)
 * Verify the proxy is bound to the correct network interface
 
 ---
@@ -252,13 +303,14 @@ The client sends requests but receives no reply.
 
 **Possible fixes:**
 
-* Ensure the SIP Proxy is running
-* Verify IP and port:
+* Ensure the SIP Proxy is running with the matching transport
+* Verify IP, port, and transport flag match:
 
   ```
-  ./scripts/run_client.sh --cli 127.0.0.1 5060
+  ./scripts/run_client.sh --cli 127.0.0.1 5060        # UDP
+  ./scripts/run_client.sh --tcp --cli 127.0.0.1 5061  # TCP
   ```
-* Check firewall settings (UDP must not be blocked)
+* Check firewall settings
 
 ---
 
@@ -301,8 +353,18 @@ Calls are not established between clients.
 **Possible fixes:**
 
 * Ensure both clients are registered before calling
+* Verify both clients use the same transport (`--tcp` on both, or neither)
 * Verify usernames/IDs are correct
 * Check proxy logs for routing issues
 
 ---
 
+### TCP connection refused
+
+Client prints a connection error when using `--tcp`.
+
+**Possible fixes:**
+
+* Confirm the proxy was started with `--tcp-port <port>`
+* Confirm the client port matches: `./scripts/run_client.sh --tcp --cli 127.0.0.1 5061`
+* Check that no firewall rule is blocking TCP on that port
