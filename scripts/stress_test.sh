@@ -6,6 +6,10 @@
 #   - Proxy server must be built
 #   - Client binary must be built
 #   - Validates: No dropped messages, no deadlocks, stable latency
+#
+# Usage:
+#   sudo ./scripts/stress_test.sh           # UDP mode (default)
+#   sudo ./scripts/stress_test.sh --tcp     # TCP mode (proxy on port 5061, clients use --tcp)
 ################################################################################
 
 set -uo pipefail
@@ -17,13 +21,35 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+################################################################################
+# Transport mode — parse --tcp flag before anything else
+################################################################################
+USE_TCP=false
+for arg in "$@"; do
+    if [ "$arg" = "--tcp" ]; then
+        USE_TCP=true
+    fi
+done
+
 # Configuration
 NUM_CLIENTS=20
 PROXY_IP="127.0.0.1"
-PROXY_PORT=5060
-CLIENT_START_PORT=6000
 DOMAIN="localhost"
-RESULTS_DIR="stress_test_results_$(date +%Y%m%d_%H%M%S)"
+
+if [ "$USE_TCP" = true ]; then
+    TRANSPORT_LABEL="TCP"
+    PROXY_PORT=5061          # TCP port the proxy listens on
+    PROXY_EXTRA_ARGS="--tcp-port ${PROXY_PORT}"
+    CLIENT_TRANSPORT_FLAG="--tcp"
+else
+    TRANSPORT_LABEL="UDP"
+    PROXY_PORT=5060          # UDP port (default)
+    PROXY_EXTRA_ARGS=""
+    CLIENT_TRANSPORT_FLAG=""
+fi
+
+CLIENT_START_PORT=6000
+RESULTS_DIR="stress_test_results_$(date +%Y%m%d_%H%M%S)_${TRANSPORT_LABEL}"
 
 # Determine script location and find build directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -47,10 +73,11 @@ CLIENT_STARTUP_WAIT=1
 REGISTER_WAIT=2
 INVITE_WAIT=5
 CLEANUP_WAIT=2
+
 # Extended testing options
 ENABLE_TCPDUMP=true
 TCPDUMP_INTERFACE="lo"
-TCPDUMP_PORT=5060
+TCPDUMP_PORT=${PROXY_PORT}
 TCPDUMP_FILE="${RESULTS_DIR}/sip_capture.pcap"
 
 ENABLE_RESOURCE_MONITORING=true
@@ -70,10 +97,16 @@ TIMEOUT_CLIENTS=0
 ################################################################################
 start_tcpdump() {
     if [ "$ENABLE_TCPDUMP" = true ]; then
-        log_info "Starting tcpdump capture on ${TCPDUMP_INTERFACE} (port ${TCPDUMP_PORT})..."
+        log_info "Starting tcpdump capture on ${TCPDUMP_INTERFACE} (port ${TCPDUMP_PORT} / ${TRANSPORT_LABEL})..."
+
+        if [ "$USE_TCP" = true ]; then
+            TCPDUMP_FILTER="tcp port ${TCPDUMP_PORT}"
+        else
+            TCPDUMP_FILTER="udp port ${TCPDUMP_PORT}"
+        fi
 
         # -U = packet-buffered: flush to disk after each packet, prevents truncation
-        tcpdump -i "$TCPDUMP_INTERFACE" -U -w "$TCPDUMP_FILE" port "$TCPDUMP_PORT" \
+        tcpdump -i "$TCPDUMP_INTERFACE" -U -w "$TCPDUMP_FILE" ${TCPDUMP_FILTER} \
             > "${RESULTS_DIR}/tcpdump.log" 2>&1 &
 
         TCPDUMP_PID=$!
@@ -102,6 +135,7 @@ stop_tcpdump() {
         log_success "tcpdump saved to $TCPDUMP_FILE"
     fi
 }
+
 monitor_resources() {
     while kill -0 "$PROXY_PID" 2>/dev/null; do
         local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
@@ -122,6 +156,7 @@ monitor_resources() {
         sleep 1
     done
 }
+
 log() {
     local level=$1
     shift
@@ -145,6 +180,7 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $*" | tee -a "${STRESS_LOG}"
 }
+
 cleanup_once=false
 cleanup() {
     if [ "${cleanup_once:-false}" = true ]; then return; fi
@@ -198,14 +234,15 @@ check_binaries() {
 }
 
 start_proxy() {
-    log_info "Starting SIP Proxy on ${PROXY_IP}:${PROXY_PORT}..."
+    log_info "Starting SIP Proxy [${TRANSPORT_LABEL}] on ${PROXY_IP}:${PROXY_PORT}..."
 
-    # The proxy waits for ENTER to stop, so we need to keep stdin open
-    # We'll use tail -f /dev/null which keeps the pipe open indefinitely
-    # Or use sleep with a very long duration
-
-    # Start tail in background to keep stdin open
-    tail -f /dev/null 2>/dev/null | "$PROXY_BIN" > "$PROXY_LOG" 2>&1 &
+    if [ "$USE_TCP" = true ]; then
+        # In TCP mode we pass --tcp-port; UDP stays on default 5060 as well.
+        # tail keeps stdin open so the proxy's "Press ENTER to stop" doesn't fire.
+        tail -f /dev/null 2>/dev/null | "$PROXY_BIN" --tcp-port "${PROXY_PORT}" > "$PROXY_LOG" 2>&1 &
+    else
+        tail -f /dev/null 2>/dev/null | "$PROXY_BIN" > "$PROXY_LOG" 2>&1 &
+    fi
     PROXY_PID=$!
 
     log_info "Proxy started with PID: $PROXY_PID"
@@ -216,20 +253,28 @@ start_proxy() {
     if ! kill -0 "$PROXY_PID" 2>/dev/null; then
         log_error "Proxy failed to start. Check $PROXY_LOG"
         log_error "Proxy log contents:"
-        cat "$PROXY_LOG" | head -20
+        head -20 "$PROXY_LOG"
         exit 1
     fi
 
     # Check if proxy is actually listening on the port
-    log_info "Checking if proxy is listening on port ${PROXY_PORT}..."
-    if command -v netstat &> /dev/null; then
-        if netstat -tuln | grep -q ":${PROXY_PORT} "; then
-            log_success "Proxy is listening on port ${PROXY_PORT}"
+    log_info "Checking if proxy is listening on port ${PROXY_PORT} (${TRANSPORT_LABEL})..."
+    if command -v ss &> /dev/null; then
+        if [ "$USE_TCP" = true ]; then
+            if ss -tln | grep -q ":${PROXY_PORT} "; then
+                log_success "Proxy is listening on TCP port ${PROXY_PORT}"
+            else
+                log_warn "Proxy may not be listening on TCP port ${PROXY_PORT} yet"
+            fi
         else
-            log_warn "Proxy may not be listening on port ${PROXY_PORT} yet"
+            if ss -uln | grep -q ":${PROXY_PORT} "; then
+                log_success "Proxy is listening on UDP port ${PROXY_PORT}"
+            else
+                log_warn "Proxy may not be listening on UDP port ${PROXY_PORT} yet"
+            fi
         fi
-    elif command -v ss &> /dev/null; then
-        if ss -tuln | grep -q ":${PROXY_PORT} "; then
+    elif command -v netstat &> /dev/null; then
+        if netstat -tuln | grep -q ":${PROXY_PORT} "; then
             log_success "Proxy is listening on port ${PROXY_PORT}"
         else
             log_warn "Proxy may not be listening on port ${PROXY_PORT} yet"
@@ -246,7 +291,7 @@ test_single_client() {
 
     CLIENT_LOGS[$client_id]="$client_log"
 
-    log_info "Client $client_id: Starting as $username@$DOMAIN"
+    log_info "Client $client_id: Starting as $username@$DOMAIN [${TRANSPORT_LABEL}]"
 
     local test_script="${RESULTS_DIR}/client_${client_id}_commands.txt"
 
@@ -285,9 +330,10 @@ EOF
 
     local start_time=$(date +%s.%N)
 
-    # Start client with auto-register
+    # Start client with auto-register; pass --tcp when in TCP mode
     (
         timeout -k 5 35 "$CLIENT_BIN" "$PROXY_IP" "$PROXY_PORT" --cli \
+            ${CLIENT_TRANSPORT_FLAG} \
             --user "$username" --domain "$DOMAIN" < "$test_script" \
             > "$client_log" 2>&1
     ) &
@@ -342,9 +388,8 @@ EOF
 }
 
 run_concurrent_clients() {
-    log_info "Launching $NUM_CLIENTS concurrent clients..."
+    log_info "Launching $NUM_CLIENTS concurrent clients [${TRANSPORT_LABEL}]..."
 
-    # Launch callees first (odd), then callers (even) to ensure callees are ready
     local pids=()
 
     # First phase: launch all callees (odd clients)
@@ -382,7 +427,7 @@ run_concurrent_clients() {
 
 analyze_results() {
     log_info "========================================="
-    log_info "STRESS TEST RESULTS"
+    log_info "STRESS TEST RESULTS [${TRANSPORT_LABEL}]"
     log_info "========================================="
 
     # Count results from result files (subshell values don't propagate)
@@ -480,10 +525,10 @@ analyze_results() {
 
     # Final verdict
     if [ $successful -eq $NUM_CLIENTS ] && [ "$dropped_count" -eq 0 ] && [ "$deadlock_count" -eq 0 ]; then
-        log_success "✓ STRESS TEST PASSED"
+        log_success "✓ STRESS TEST PASSED [${TRANSPORT_LABEL}]"
         return 0
     else
-        log_error "✗ STRESS TEST FAILED"
+        log_error "✗ STRESS TEST FAILED [${TRANSPORT_LABEL}]"
         return 1
     fi
 }
@@ -521,9 +566,10 @@ generate_report() {
 SIP STRESS TEST REPORT
 ================================================================================
 Test Date: $(date)
+Transport: ${TRANSPORT_LABEL}
 Configuration:
   - Number of Clients: $NUM_CLIENTS
-  - Proxy: ${PROXY_IP}:${PROXY_PORT}
+  - Proxy: ${PROXY_IP}:${PROXY_PORT} (${TRANSPORT_LABEL})
   - Domain: $DOMAIN
 
 Results:
@@ -539,6 +585,7 @@ Logs:
   - Proxy Log: $PROXY_LOG
   - Client Logs: ${RESULTS_DIR}/client_*.log
   - Stress Test Log: $STRESS_LOG
+  - Packet Capture: $TCPDUMP_FILE
 
 ================================================================================
 EOF
@@ -553,8 +600,8 @@ EOF
 
 main() {
     log_info "========================================="
-    log_info "SIP STRESS TEST - Week 3"
-    log_info "Testing: 20 Concurrent Clients"
+    log_info "SIP STRESS TEST — Transport: ${TRANSPORT_LABEL}"
+    log_info "Testing: ${NUM_CLIENTS} Concurrent Clients"
     log_info "========================================="
 
     # Pre-flight checks
@@ -582,8 +629,6 @@ main() {
     # Generate summary report
     generate_report
     sleep 2
-    # Cleanup (trap will handle this, but explicit call for clarity)
-    # cleanup is called by trap
 
     exit $test_result
 }
