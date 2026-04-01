@@ -3,6 +3,8 @@
 This project implements a minimal SIP Proxy and SIP Client with a Windows UI.
 It supports basic SIP call flow (REGISTER, INVITE, BYE) over **UDP and TCP**.
 
+The SIP Proxy includes a **metrics endpoint** (HTTP on port 8080) for real-time monitoring.
+
 ---
 
 ## Prerequisites
@@ -77,6 +79,8 @@ CMake build:
 ./build/bin/sip_proxy --tcp-port 5061
 ```
 
+**Note:** The metrics endpoint automatically starts on **port 8080** when the proxy starts.
+
 ---
 
 ## Run SIP Proxy using Script
@@ -93,6 +97,97 @@ This script:
 
 * Compiles the proxy
 * Runs it with the selected transport(s) immediately
+* Metrics endpoint is available at http://localhost:8080
+
+---
+
+## Metrics Endpoint
+
+### Overview
+
+The SIP Proxy exposes real-time operational metrics via an HTTP endpoint on **port 8080**.
+
+### Available Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `SIP_messages_received` | counter | Total SIP messages received by the proxy |
+| `SIP_messages_sent` | counter | Total SIP messages sent by the proxy |
+| `SIP_active_calls` | gauge | Current number of active calls |
+| `SIP_registered_users` | gauge | Current number of registered users |
+
+### Accessing Metrics
+
+**Using curl:**
+
+```bash
+curl http://localhost:8080
+```
+
+**Using web browser:**
+
+Open in browser: `http://localhost:8080`
+
+**Example output:**
+
+```
+SIP_messages_received counter
+SIP_messages_received 142
+SIP_messages_sent counter
+SIP_messages_sent 138
+SIP_active_calls gauge
+SIP_active_calls 2
+SIP_registered_users gauge
+SIP_registered_users 3
+```
+
+### Monitoring in Real-Time
+
+**Watch metrics continuously:**
+
+```bash
+watch -n 1 curl -s http://localhost:8080
+```
+
+**Create a monitoring script:**
+
+```bash
+#!/bin/bash
+# monitor.sh
+
+while true; do
+    clear
+    echo "=== SIP Proxy Metrics ==="
+    echo "Time: $(date)"
+    echo ""
+    curl -s http://localhost:8080
+    echo ""
+    echo "========================="
+    sleep 2
+done
+```
+
+Make it executable and run:
+
+```bash
+chmod +x monitor.sh
+./monitor.sh
+```
+
+### Integration with Monitoring Tools
+
+**Prometheus integration (example):**
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'sip-proxy'
+    static_configs:
+      - targets: ['localhost:8080']
+    scrape_interval: 5s
+```
+
+**Note:** Current format is plain text. For Prometheus integration, the output format would need to be converted to Prometheus exposition format.
 
 ---
 
@@ -208,6 +303,19 @@ sudo ./scripts/stress_test.sh --tcp
 
 The `--tcp` flag starts the proxy with `--tcp-port 5061` and passes `--tcp` to every client. Results are saved to a directory named `stress_test_results_<timestamp>_TCP` (or `_UDP`) inside `scripts/`.
 
+**Monitoring during stress test:**
+
+In a separate terminal, monitor metrics in real-time:
+
+```bash
+watch -n 1 curl -s http://localhost:8080
+```
+
+This allows you to observe:
+* Message throughput (`SIP_messages_received` and `SIP_messages_sent` counters increasing)
+* Peak concurrent calls (`SIP_active_calls` gauge)
+* Registered users count
+
 ---
 
 ## Example Scenario
@@ -219,14 +327,20 @@ Terminal 1 — Start proxy:
 ./sip_proxy --tcp-port 5061     # TCP
 ```
 
-Terminal 2 — Run client A (alice):
+Terminal 2 — Monitor metrics:
+
+```
+watch -n 1 curl -s http://localhost:8080
+```
+
+Terminal 3 — Run client A (alice):
 
 ```
 ./scripts/run_client.sh --cli           # UDP
 ./scripts/run_client.sh --tcp --cli     # TCP
 ```
 
-Terminal 3 — Run client B (bob):
+Terminal 4 — Run client B (bob):
 
 ```
 ./scripts/run_client.sh --cli           # UDP
@@ -235,14 +349,14 @@ Terminal 3 — Run client B (bob):
 
 ### Steps:
 
-1. Alice registers
-2. Bob registers
-3. Alice calls Bob
-4. Bob answers
-5. Alice hangs up
+1. Alice registers → Observe `SIP_registered_users` increase to 1
+2. Bob registers → Observe `SIP_registered_users` increase to 2
+3. Alice calls Bob → Observe `SIP_active_calls` increase to 1
+4. Bob answers → Call established
+5. Alice hangs up → Observe `SIP_active_calls` decrease to 0
 6. Bob receives end of call
-7. Bob exits the client
-8. Alice exits the client
+7. Bob exits the client → Observe `SIP_registered_users` decrease to 1
+8. Alice exits the client → Observe `SIP_registered_users` decrease to 0
 
 ---
 
@@ -262,6 +376,22 @@ The proxy failed to bind to its port on startup.
   sudo kill -9 <PID>
   ```
 * Or specify a different port when starting the proxy.
+
+---
+
+### Port 8080 (metrics) already in use
+
+The metrics endpoint failed to start.
+
+**Possible fixes:**
+
+* Stop the process using port 8080:
+
+  ```
+  sudo lsof -i :8080
+  sudo kill -9 <PID>
+  ```
+* Note: The proxy will continue to function for SIP traffic even if metrics endpoint fails to start.
 
 ---
 
@@ -295,6 +425,24 @@ The proxy is running but not receiving SIP messages.
 
 ---
 
+### Metrics endpoint not responding
+
+Cannot access http://localhost:8080
+
+**Possible fixes:**
+
+* Verify the proxy started successfully (check console output for "[Metrics] Server running on port 8080")
+* Check if port 8080 is blocked by firewall:
+
+  ```
+  sudo ufw status
+  sudo ufw allow 8080
+  ```
+* Try accessing from the local machine first before remote access
+* Check if another service is using port 8080
+
+---
+
 ## Troubleshooting SIP Client
 
 ### No response from proxy
@@ -311,6 +459,12 @@ The client sends requests but receives no reply.
   ./scripts/run_client.sh --tcp --cli 127.0.0.1 5061  # TCP
   ```
 * Check firewall settings
+* Use metrics endpoint to verify proxy is receiving messages:
+
+  ```
+  curl http://localhost:8080
+  # Check if SIP_messages_received is increasing
+  ```
 
 ---
 
@@ -356,6 +510,11 @@ Calls are not established between clients.
 * Verify both clients use the same transport (`--tcp` on both, or neither)
 * Verify usernames/IDs are correct
 * Check proxy logs for routing issues
+* Monitor metrics to see if messages are being sent/received:
+
+  ```
+  curl http://localhost:8080
+  ```
 
 ---
 
@@ -368,3 +527,81 @@ Client prints a connection error when using `--tcp`.
 * Confirm the proxy was started with `--tcp-port <port>`
 * Confirm the client port matches: `./scripts/run_client.sh --tcp --cli 127.0.0.1 5061`
 * Check that no firewall rule is blocking TCP on that port
+
+---
+
+## Metrics Usage Examples
+
+### Example 1: Basic Monitoring
+
+```bash
+# Start proxy
+./sip_proxy --tcp-port 5061
+
+# In another terminal, watch metrics
+watch -n 1 curl -s http://localhost:8080
+```
+
+### Example 2: Performance Testing
+
+```bash
+# Run stress test
+sudo ./scripts/stress_test.sh --tcp
+
+# In another terminal, monitor metrics continuously
+while true; do
+    echo "=== $(date) ==="
+    curl -s http://localhost:8080 | grep -E "SIP_messages|SIP_active_calls"
+    echo ""
+    sleep 1
+done
+```
+
+### Example 3: Logging Metrics to File
+
+```bash
+# Create monitoring script
+cat > log_metrics.sh << 'EOF'
+#!/bin/bash
+while true; do
+    timestamp=$(date +"%Y-%m-%d %H:%M:%S")
+    metrics=$(curl -s http://localhost:8080 | tr '\n' ' ')
+    echo "$timestamp | $metrics" >> metrics.log
+    sleep 5
+done
+EOF
+
+chmod +x log_metrics.sh
+./log_metrics.sh
+```
+
+### Example 4: Alert on High Active Calls
+
+```bash
+#!/bin/bash
+# alert_high_calls.sh
+
+THRESHOLD=10
+
+while true; do
+    active_calls=$(curl -s http://localhost:8080 | grep "SIP_active_calls [0-9]" | awk '{print $2}')
+    
+    if [ "$active_calls" -gt "$THRESHOLD" ]; then
+        echo "ALERT: High active calls: $active_calls"
+        # Send notification (email, Slack, etc.)
+    fi
+    
+    sleep 10
+done
+```
+
+---
+
+## Additional Notes
+
+* The metrics endpoint runs independently of SIP traffic and does not impact proxy performance
+* Metrics are stored in memory using atomic counters (thread-safe)
+* The metrics server automatically stops when the proxy shuts down
+* Current implementation uses plain text format; can be extended to support Prometheus format
+* Counters (`SIP_messages_received`, `SIP_messages_sent`) are cumulative and never decrease
+* Gauges (`SIP_active_calls`, `SIP_registered_users`) reflect current state and can increase or decrease

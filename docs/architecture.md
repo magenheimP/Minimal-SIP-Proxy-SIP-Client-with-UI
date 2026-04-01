@@ -18,6 +18,7 @@ The architecture is designed to demonstrate:
 * Clear separation of concerns
 * Safe memory management (RAII, smart pointers)
 * Pluggable transport layer (UDP and TCP behind a shared interface)
+* Real-time metrics monitoring via HTTP endpoint
 
 ---
 
@@ -37,6 +38,13 @@ The architecture is designed to demonstrate:
               +------+------+
               |  SIP Proxy  |
               |   Server    |
+              +------+------+
+                     |
+                     | HTTP :8080
+                     |
+              +------+------+
+              |   Metrics   |
+              |  Endpoint   |
               +-------------+
 ```
 
@@ -45,6 +53,7 @@ The proxy acts as an intermediary:
 * Receives all SIP messages (over UDP or TCP)
 * Parses and processes them
 * Routes them to the correct destination using the same transport the client used
+* Exposes real-time operational metrics via HTTP
 
 ---
 
@@ -62,11 +71,16 @@ UDP Listener  |  TCP Listener
             ↓
      Worker Thread Pool
             ↓
-         SIP Router
+         SIP Router ←→ Metrics Collector
             ↓
     Call State Machine
             ↓
           Logger
+            
+            
+    Metrics Server (HTTP :8080)
+            ↓
+    Metrics Collector (Singleton)
 ```
 
 ---
@@ -107,8 +121,8 @@ Key responsibility:
 
 * Single thread responsible for:
 
-  * Receiving messages from the active transport (UDP or TCP)
-  * Pushing them into a thread-safe queue
+    * Receiving messages from the active transport (UDP or TCP)
+    * Pushing them into a thread-safe queue
 
 Why it exists:
 
@@ -122,8 +136,8 @@ Why it exists:
 * Thread-safe queue shared between dispatcher and workers
 * Supports:
 
-  * Blocking `pop()`
-  * Safe shutdown
+    * Blocking `pop()`
+    * Safe shutdown
 
 Implementation requirements:
 
@@ -137,8 +151,9 @@ Implementation requirements:
 * Fixed number of worker threads
 * Each thread:
 
-  * Pulls messages from queue
-  * Processes them independently
+    * Pulls messages from queue
+    * Processes them independently
+    * Updates metrics via MetricsCollector
 
 Benefits:
 
@@ -174,6 +189,7 @@ Responsibilities:
 * Identify message type (REGISTER, INVITE, response)
 * Route messages to correct destination
 * Interact with registration table
+* Update metrics counters for sent/received messages
 
 Examples:
 
@@ -215,6 +231,7 @@ Responsibilities:
 * Track call progress
 * Validate transitions
 * Provide structured logging
+* Update active calls metric
 
 ---
 
@@ -239,6 +256,78 @@ Also logs:
   ```
   [HEADER MODIFIED] Via: ...
   ```
+
+---
+
+#### 3.2.11 Metrics Collector 
+
+A **singleton** component that collects real-time operational metrics.
+
+**Tracked Metrics:**
+
+* `SIP_messages_received` (counter) — Total SIP messages received by the proxy
+* `SIP_messages_sent` (counter) — Total SIP messages sent by the proxy
+* `SIP_active_calls` (gauge) — Current number of active calls
+* `SIP_registered_users` (gauge) — Current number of registered users
+
+**Implementation:**
+
+* Thread-safe using `std::atomic<int64_t>`
+* Singleton pattern ensures global access
+* Updated automatically by SIP Router and Call State Machine
+
+**Usage in code:**
+
+```cpp
+MetricsCollector::instance().inc_messages_received();
+MetricsCollector::instance().inc_active_calls();
+MetricsCollector::instance().dec_registered_users();
+```
+
+---
+
+#### 3.2.12 Metrics Server *(new)*
+
+An **HTTP server** running on port **8080** that exposes metrics in text format.
+
+**Features:**
+
+* Listens on TCP port 8080
+* Responds to any HTTP request with current metrics
+* Returns plain text response
+* Non-blocking and thread-safe
+
+**Example response:**
+
+```
+SIP_messages_received counter
+SIP_messages_received 142
+SIP_messages_sent counter
+SIP_messages_sent 138
+SIP_active_calls gauge
+SIP_active_calls 2
+SIP_registered_users gauge
+SIP_registered_users 3
+```
+
+**Access metrics:**
+
+```bash
+curl http://localhost:8080
+```
+
+Or open in browser:
+
+```
+http://localhost:8080
+```
+
+**Architecture:**
+
+* Runs in separate thread
+* Does not interfere with SIP processing
+* Reads metrics from MetricsCollector singleton
+* Automatic graceful shutdown
 
 ---
 
@@ -423,6 +512,7 @@ Updates UI accordingly.
 * Shared queue
 * UDP: 1 receive thread
 * TCP: 1 accept thread + 1 receive thread per active connection
+* 1 Metrics server thread (HTTP on port 8080)
 
 ### Client
 
@@ -444,12 +534,27 @@ Updates UI accordingly.
 
 1. Client A sends INVITE over TCP connection to proxy
 2. Proxy's TCP receive thread reads message (framed by `\r\n\r\n`)
-3. Dispatcher pushes to queue
-4. Worker thread processes message
-5. Parser creates SIPMessage
-6. Router finds target (Client B) in registration table
-7. Message forwarded to Client B via its TCP connection
-8. Responses follow the same path back
+3. **MetricsCollector increments messages_received counter**
+4. Dispatcher pushes to queue
+5. Worker thread processes message
+6. Parser creates SIPMessage
+7. Router finds target (Client B) in registration table
+8. **MetricsCollector increments messages_sent counter**
+9. Message forwarded to Client B via its TCP connection
+10. Responses follow the same path back
+
+**Monitoring the call:**
+
+```bash
+# In another terminal:
+curl http://localhost:8080
+
+# Output shows:
+# SIP_messages_received 2
+# SIP_messages_sent 2
+# SIP_active_calls 1
+# SIP_registered_users 2
+```
 
 ---
 
@@ -477,6 +582,7 @@ Each module has a single responsibility:
 * Networking → transport only
 * Proxy → SIP logic
 * Client → UI + message generation
+* Metrics → observability
 
 ---
 
@@ -491,6 +597,7 @@ Each module has a single responsibility:
 
 * All shared data structures are protected
 * No undefined behavior due to races
+* Atomic operations for metrics
 
 ---
 
@@ -501,29 +608,85 @@ Each module has a single responsibility:
 
 ---
 
-### 9.5 Minimal but Extensible
+### 9.5 Observability
+
+* Real-time metrics expose system health
+* HTTP endpoint enables integration with monitoring tools
+* Metrics collected without impacting SIP performance
+
+---
+
+### 9.6 Minimal but Extensible
 
 System is intentionally simple, but allows:
 
 * epoll-based networking
 * TLS over TCP
 * Advanced SIP features
+* Integration with Prometheus/Grafana
 
 ---
 
-## 10. Future Extensions
+## 10. Metrics Integration
+
+### 10.1 Monitoring Tools Integration
+
+The metrics endpoint can be integrated with popular monitoring solutions:
+
+**Prometheus:**
+
+```yaml
+scrape_configs:
+  - job_name: 'sip-proxy'
+    static_configs:
+      - targets: ['localhost:8080']
+```
+
+**Custom monitoring script:**
+
+```bash
+#!/bin/bash
+while true; do
+    curl -s http://localhost:8080
+    echo "---"
+    sleep 5
+done
+```
+
+---
+
+### 10.2 Metrics Use Cases
+
+**Performance testing:**
+* Track message throughput during stress tests
+* Monitor active call capacity
+
+**Production monitoring:**
+* Alert on high active calls
+* Track registration growth
+* Debug message routing issues
+
+**Capacity planning:**
+* Identify peak usage patterns
+* Determine when to scale
+
+---
+
+## 11. Future Extensions
 
 Possible improvements:
 
 * epoll/reactor pattern
 * TLS support
 * Load testing tools
-* Metrics endpoint
+* Prometheus-format metrics export
+* Additional metrics (latency, error rates, transport-specific counters)
 * SIP authentication
+* Metrics dashboard (web UI)
 
 ---
 
-## 11. Summary
+## 12. Summary
 
 This architecture provides:
 
@@ -532,5 +695,6 @@ This architecture provides:
 * Safe concurrency model
 * Pluggable transport layer (UDP and TCP behind `IUdpTransport`)
 * Extensible SIP processing pipeline
+* **Real-time observability via HTTP metrics endpoint**
 
 It is designed for learning core backend concepts while remaining realistic enough to resemble production systems.
