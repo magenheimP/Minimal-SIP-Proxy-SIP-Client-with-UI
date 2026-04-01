@@ -456,12 +456,11 @@ RoutingResult SIPRouter::handle_response(const common::SIPMessage& message) {
             std::lock_guard<std::mutex> lock(call_contexts_mutex_);
             call_contexts_.erase(call_id);
         }
-        MetricsCollector::instance().dec_active_calls();
         common::Logger::instance().log(
             "SIPRouter",
             call_id,
             "CALL_REMOVED",
-            "Removed call context and session after 200 OK to BYE"
+            "Removed call context and session after 476 BUSY"
         );
     }
 
