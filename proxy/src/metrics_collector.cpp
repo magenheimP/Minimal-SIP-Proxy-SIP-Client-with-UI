@@ -1,5 +1,7 @@
 #include "../include/proxy/metrics_collector.hpp"
 
+#include <ostream>
+
 MetricsCollector& MetricsCollector::instance() {
     static MetricsCollector instance;
     return instance;
@@ -38,17 +40,18 @@ void MetricsCollector::dec_registered_users() {
 std::string MetricsCollector::to_string() const {
     std::string output;
 
-    output += "SIP_messages_received counter\n";
-    output += "SIP_messages_received " + std::to_string(messages_received.load()) + "\n";
 
-    output += "SIP_messages_sent counter\n";
-    output += "SIP_messages_sent " + std::to_string(messages_sent.load()) + "\n";
+    output += "--------------------------------------\n";
+    output += "SIP_messages_received: " + std::to_string(messages_received.load()) + "\n";
 
-    output += "SIP_active_calls gauge\n";
-    output += "SIP_active_calls " + std::to_string(active_calls.load()) + "\n";
+    output += "--------------------------------------\n";
+    output += "SIP_messages_sent: " + std::to_string(messages_sent.load()) + "\n";
 
-    output += "SIP_registered_users gauge\n";
-    output += "SIP_registered_users " + std::to_string(registered_users.load()) + "\n";
+    output += "--------------------------------------\n";
+    output += "SIP_active_calls: " + std::to_string(active_calls.load()) + "\n";
+
+    output += "--------------------------------------\n";
+    output += "SIP_registered_users: " + std::to_string(registered_users.load()) + "\n";
 
     return output;
 }
